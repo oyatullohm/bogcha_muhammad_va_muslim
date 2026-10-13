@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Chiqimlar va statistika{% endblock %}
+{% block page_title %}Chiqimlar va statistika{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#chiqimlar"><i class="bi bi-receipt me-1"></i>Chiqimlar</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#kategoriyalar"><i class="bi bi-tags me-1"></i>Kategoriyalar</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#statistika"><i class="bi bi-bar-chart-line me-1"></i>Statistika</button></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ================= CHIQIMLAR ================= -->
+  <div class="tab-pane fade show active" id="chiqimlar">
+    <div class="card"><div class="card-body">
+      <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+        <form method="get" class="row g-2 flex-grow-1" style="max-width:820px">
+          <div class="col-md-3"><select name="category" class="form-select">
+            <option value="">Barcha kategoriya</option>
+            {% for c in categories %}<option value="{{ c.pk }}" {% if c.pk == category_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+          </select></div>
+          <div class="col-md-3"><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-control"></div>
+          <div class="col-md-3"><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-control"></div>
+          <div class="col-md-2"><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Izoh"></div>
+          <div class="col-md-1"><button class="btn btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button></div>
+        </form>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi chiqim</button>
+      </div>
+
+      <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+        <span class="badge bg-danger fs-6">Jami: {{ total_amount|floatformat:"0g" }} so'm</span>
+        {% for r in by_category %}<span class="badge bg-light text-dark border">{{ r.category__name }}: {{ r.t|floatformat:"0g" }}</span>{% endfor %}
+      </div>
+
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Sana</th><th>Kategoriya</th><th class="text-end">Summa</th><th>Izoh</th><th>Kiritdi</th><th class="text-end">Amallar</th></tr></thead>
+        <tbody>
+        {% for e in expenses %}
+          <tr>
+            <td>{{ e.date|date:"d.m.Y" }}</td><td><span class="badge bg-secondary-subtle text-secondary">{{ e.category.name }}</span></td>
+            <td class="text-end fw-semibold text-danger">{{ e.amount|floatformat:"0g" }}</td>
+            <td class="small">{{ e.description|default:""|truncatechars:50 }}</td>
+            <td class="small text-muted">{{ e.created_by.username|default:"—" }}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+                data-action="{% url 'expense_update' e.pk %}" data-category="{{ e.category_id }}" data-amount="{{ e.amount|unlocalize }}"
+                data-date="{{ e.date|date:'Y-m-d' }}" data-description="{{ e.description|default_if_none:'' }}"><i class="bi bi-pencil"></i></button>
+              {% url 'expense_delete' e.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Chiqim o'chirilsinmi?" title="O'chirish" %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Chiqim topilmadi</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% include '_pagination.html' %}
+    </div></div>
+  </div>
+
+  <!-- ================= KATEGORIYALAR ================= -->
+  <div class="tab-pane fade" id="kategoriyalar">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-3"><h5 class="mb-0">Chiqim kategoriyalari</h5>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#catCreateModal"><i class="bi bi-plus-lg me-1"></i>Yangi kategoriya</button></div>
+      <table class="table table-hover"><thead class="table-light"><tr><th>Nomi</th><th>Tavsif</th><th class="text-end">Amallar</th></tr></thead><tbody>
+      {% for c in categories %}
+        <tr><td class="fw-semibold">{{ c.name }}</td><td class="text-muted">{{ c.description|default:"—" }}</td>
+          <td class="text-end text-nowrap">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#catEditModal" data-edit="#catEditModal"
+              data-action="{% url 'category_update' c.pk %}" data-name="{{ c.name }}" data-description="{{ c.description|default_if_none:'' }}"><i class="bi bi-pencil"></i></button>
+            {% url 'category_delete' c.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Kategoriya o'chirilsinmi? (chiqimi bo'lsa o'chmaydi)" title="O'chirish" %}
+          </td></tr>
+      {% empty %}<tr><td colspan="3" class="text-center text-muted py-4">Kategoriya yo'q (masalan: Oylik, Kommunal, Oziq-ovqat)</td></tr>{% endfor %}
+      </tbody></table>
+    </div></div>
+  </div>
+
+  <!-- ================= STATISTIKA ================= -->
+  <div class="tab-pane fade" id="statistika">
+    <div class="btn-group mb-3">
+      {% for k, label in periods.items %}
+      <a href="?period={{ k }}#statistika" class="btn {% if k == period %}btn-primary{% else %}btn-outline-primary{% endif %}">{{ label }}</a>
+      {% endfor %}
+    </div>
+    <div class="text-muted small mb-2">{{ summary.from|date:"d.m.Y" }} — {{ summary.to|date:"d.m.Y" }}</div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Kirim</div><div class="fs-3 fw-bold text-success">+ {{ summary.income|floatformat:"0g" }}</div></div></div></div>
+      <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Chiqim</div><div class="fs-3 fw-bold text-danger">− {{ summary.expense|floatformat:"0g" }}</div></div></div></div>
+      <div class="col-md-4"><div class="card"><div class="card-body"><div class="text-muted small">Foyda</div><div class="fs-3 fw-bold {% if summary.profit < 0 %}text-danger{% else %}text-primary{% endif %}">{{ summary.profit|floatformat:"0g" }}</div></div></div></div>
+    </div>
+
+    <div class="row g-3 mb-3">
+      <div class="col-lg-8"><div class="card"><div class="card-body">
+        <h6>Oylar bo'yicha kirim / chiqim</h6><div style="height:300px"><canvas id="monthChart"></canvas></div></div></div></div>
+      <div class="col-lg-4"><div class="card"><div class="card-body">
+        <h6>Chiqim kategoriyalari</h6><div style="height:300px"><canvas id="catChart"></canvas></div></div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-6"><div class="card"><div class="card-body">
+        <h6>Kategoriya bo'yicha chiqim</h6>
+        {% for c in summary.expense_by_category %}
+        <div class="mb-2"><div class="d-flex justify-content-between small"><span>{{ c.category__name }}</span><span>{{ c.total|floatformat:"0g" }} ({{ c.percent }}%)</span></div>
+          <div class="progress" style="height:6px"><div class="progress-bar bg-danger" style="width:{{ c.percent|unlocalize }}%"></div></div></div>
+        {% empty %}<div class="text-muted">Ma'lumot yo'q</div>{% endfor %}
+      </div></div></div>
+      <div class="col-lg-6"><div class="card"><div class="card-body">
+        <h6>Davrlar solishtirmasi</h6>
+        <table class="table table-sm mb-0"><thead><tr><th>Davr</th><th class="text-end">Kirim</th><th class="text-end">Chiqim</th><th class="text-end">Foyda</th></tr></thead><tbody>
+          {% for p in all_periods %}<tr><td class="fw-semibold">{{ p.label }}</td><td class="text-end text-success">{{ p.income|floatformat:"0g" }}</td>
+            <td class="text-end text-danger">{{ p.expense|floatformat:"0g" }}</td><td class="text-end fw-bold">{{ p.profit|floatformat:"0g" }}</td></tr>{% endfor %}
+        </tbody></table>
+      </div></div></div>
+    </div>
+  </div>
+</div>
+
+{% url 'expense_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi chiqim" form=form action=create_url icon='plus-circle' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Chiqimni tahrirlash" form=edit_form action='' %}
+{% url 'category_create' as cat_url %}
+{% include '_form_modal.html' with modal_id='catCreateModal' title="Yangi kategoriya" form=category_form action=cat_url icon='tag' size='' %}
+{% include '_form_modal.html' with modal_id='catEditModal' title="Kategoriyani tahrirlash" form=category_edit_form action='' size='' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+{{ chart|json_script:"chart-data" }}
+{{ cat_chart|json_script:"cat-data" }}
+<script>
+  const c = JSON.parse(document.getElementById('chart-data').textContent);
+  new Chart(document.getElementById('monthChart'), {
+    type: 'bar',
+    data: { labels: c.labels, datasets: [
+      { label: 'Kirim', data: c.income, backgroundColor: '#22c55e' },
+      { label: 'Chiqim', data: c.expense, backgroundColor: '#ef4444' },
+      { label: 'Foyda', data: c.profit, type: 'line', borderColor: '#3b82f6', backgroundColor: '#3b82f6', tension: .3 }
+    ]},
+    options: { responsive: true, maintainAspectRatio: false }
+  });
+  const k = JSON.parse(document.getElementById('cat-data').textContent);
+  new Chart(document.getElementById('catChart'), {
+    type: 'doughnut',
+    data: { labels: k.labels, datasets: [{ data: k.values,
+      backgroundColor: ['#3b82f6','#ef4444','#f59e0b','#22c55e','#8b5cf6','#06b6d4','#ec4899','#64748b'] }]},
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Taomlar va menyu{% endblock %}
+{% block page_title %}Taomlar va kunlik menyu{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#menyu"><i class="bi bi-calendar-check me-1"></i>Kunlik menyu va summa</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#taomlar"><i class="bi bi-egg-fried me-1"></i>Taomlar</button></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ================= MENYU ================= -->
+  <div class="tab-pane fade show active" id="menyu">
+    <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+      <div class="d-flex align-items-center gap-2">
+        <a class="btn btn-outline-secondary" href="?date={{ prev_day|date:'Y-m-d' }}"><i class="bi bi-chevron-left"></i></a>
+        <form method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" class="form-control" onchange="this.form.submit()"></form>
+        <a class="btn btn-outline-secondary" href="?date={{ next_day|date:'Y-m-d' }}"><i class="bi bi-chevron-right"></i></a>
+      </div>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#menuCreateModal"><i class="bi bi-plus-lg me-1"></i>Menyuga taom qo'shish</button>
+    </div>
+
+    <!-- 3 ta summa -->
+    <div class="row g-3 mb-3">
+      <div class="col-md-4"><div class="card border-start border-4 border-primary"><div class="card-body">
+        <div class="text-muted small">Kunlik summa ({{ day|date:"d.m.Y" }})</div><div class="fs-3 fw-bold text-primary">{{ day_total|floatformat:"0g" }} so'm</div></div></div></div>
+      <div class="col-md-4"><div class="card border-start border-4 border-success"><div class="card-body">
+        <div class="text-muted small">Haftalik summa ({{ week_start|date:"d.m" }} – {{ week_end|date:"d.m" }})</div><div class="fs-3 fw-bold text-success">{{ week_total|floatformat:"0g" }} so'm</div></div></div></div>
+      <div class="col-md-4"><div class="card border-start border-4 border-warning"><div class="card-body">
+        <div class="text-muted small">Oylik summa ({{ month_start|date:"F Y" }})</div><div class="fs-3 fw-bold text-warning">{{ month_total|floatformat:"0g" }} so'm</div></div></div></div>
+    </div>
+
+    <div class="row g-3">
+      <!-- Tanlangan kun menyusi -->
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header bg-white fw-semibold">{{ day|date:"d F, l" }} menyusi</div>
+        <div class="table-responsive"><table class="table mb-0">
+          <tbody>
+          {% for m in menus %}
+            <tr>
+              <td><span class="badge bg-light text-dark border">{{ m.get_meal_time_display }}</span></td>
+              <td class="fw-semibold">{{ m.meal.name }}
+                <div class="small text-muted">{{ m.note|default:"" }}</div>
+                <div class="mt-1">{% for o in m.outs.all %}<span class="badge bg-light text-dark border fw-normal">{{ o.product.name }} {{ o.quantity|floatformat:"-3" }} {{ o.product.unit }} · {{ o.cost|floatformat:"0g" }}</span> {% empty %}<span class="small text-muted">mahsulot belgilanmagan</span>{% endfor %}</div></td>
+              <td class="text-end fw-semibold">{{ m.cost|floatformat:"0g" }}</td>
+              <td class="text-end text-nowrap">
+                <a class="btn btn-sm btn-outline-success" href="{% url 'product_list' %}?menu={{ m.pk }}#chiqim" title="Ombordan mahsulot ayirib shu taomga yozish"><i class="bi bi-box-arrow-up me-1"></i>Mahsulot</a>
+                <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#menuEditModal" data-edit="#menuEditModal"
+                  data-action="{% url 'menu_update' m.pk %}" data-date="{{ m.date|date:'Y-m-d' }}" data-meal_time="{{ m.meal_time }}"
+                  data-meal="{{ m.meal_id }}" data-cost="{{ m.cost|unlocalize }}" data-note="{{ m.note|default_if_none:'' }}"><i class="bi bi-pencil"></i></button>
+                {% url 'menu_delete' m.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Menyudan o'chirilsinmi?" title="O'chirish" %}
+              </td>
+            </tr>
+          {% empty %}<tr><td class="text-center text-muted py-4">Bu kunga menyu kiritilmagan</td></tr>{% endfor %}
+          </tbody>
+          {% if menus %}<tfoot><tr class="table-light"><th colspan="2">Jami</th><th class="text-end">{{ day_total|floatformat:"0g" }}</th><th></th></tr></tfoot>{% endif %}
+        </table></div>
+      </div></div>
+
+      <!-- Hafta -->
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header bg-white fw-semibold">Hafta kunlari bo'yicha</div>
+        <div class="table-responsive"><table class="table mb-0">
+          <tbody>
+          {% for d in week_days %}
+            <tr class="{% if d.selected %}table-primary{% endif %}">
+              <td><a class="text-decoration-none" href="?date={{ d.date|date:'Y-m-d' }}">{{ d.date|date:"D, d.m" }}</a></td>
+              <td class="text-end fw-semibold">{{ d.total|floatformat:"0g" }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+          <tfoot><tr class="table-light"><th>Hafta jami</th><th class="text-end">{{ week_total|floatformat:"0g" }}</th></tr></tfoot>
+        </table></div>
+      </div></div>
+
+      <!-- Oy -->
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header bg-white fw-semibold">Oy — taom turi bo'yicha</div>
+        <table class="table mb-0"><tbody>
+          {% for r in month_by_time %}<tr><td>{{ r.label }}</td><td class="text-end fw-semibold">{{ r.t|floatformat:"0g" }}</td></tr>
+          {% empty %}<tr><td class="text-muted text-center py-3">Ma'lumot yo'q</td></tr>{% endfor %}
+        </tbody><tfoot><tr class="table-light"><th>Oy jami</th><th class="text-end">{{ month_total|floatformat:"0g" }}</th></tr></tfoot></table>
+      </div></div>
+
+      <div class="col-lg-6"><div class="card h-100"><div class="card-header bg-white fw-semibold">Oy — kunlar bo'yicha</div>
+        <div class="table-responsive" style="max-height:260px"><table class="table table-sm mb-0"><tbody>
+          {% for r in month_days %}<tr><td><a class="text-decoration-none" href="?date={{ r.date|date:'Y-m-d' }}">{{ r.date|date:"d.m.Y" }}</a></td><td class="text-end">{{ r.t|floatformat:"0g" }}</td></tr>
+          {% empty %}<tr><td class="text-muted text-center py-3">Ma'lumot yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+      </div></div>
+    </div>
+  </div>
+
+  <!-- ================= TAOMLAR ================= -->
+  <div class="tab-pane fade" id="taomlar">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-3"><h5 class="mb-0">Taomlar ro'yxati</h5>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi taom</button></div>
+      <div class="row g-3">
+        {% for m in meals %}
+        <div class="col-6 col-md-4 col-xl-3"><div class="card h-100 border {% if not m.is_active %}opacity-50{% endif %}">
+          {% if m.photo %}<img src="{{ m.photo.url }}" class="card-img-top" style="height:140px;object-fit:cover">
+          {% else %}<div class="bg-light d-flex align-items-center justify-content-center text-muted" style="height:140px"><i class="bi bi-egg-fried fs-1"></i></div>{% endif %}
+          <div class="card-body py-2"><div class="fw-semibold">{{ m.name }}</div><div class="small text-muted">{{ m.description|default:""|truncatechars:50 }}</div></div>
+          <div class="card-footer bg-white d-flex gap-1 justify-content-end">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+              data-action="{% url 'meal_update' m.pk %}" data-name="{{ m.name }}" data-description="{{ m.description|default_if_none:'' }}" data-is_active="{{ m.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+            {% if user.is_admin %}{% url 'meal_toggle' m.pk as tg %}
+              {% if m.is_active %}{% include '_post_btn.html' with url=tg icon='archive' cls='btn-outline-secondary' confirm="Taom arxivga olinsinmi?" title="Arxivga" %}
+              {% else %}{% include '_post_btn.html' with url=tg icon='arrow-counterclockwise' cls='btn-outline-success' title="Faollashtirish" %}{% endif %}{% endif %}
+          </div>
+        </div></div>
+        {% empty %}<div class="col-12 text-center text-muted py-4">Taom yo'q</div>{% endfor %}
+      </div>
+    </div></div>
+  </div>
+</div>
+
+{% url 'menu_create' as menu_url %}
+{% include '_form_modal.html' with modal_id='menuCreateModal' title="Menyuga taom qo'shish" form=menu_form action=menu_url icon='plus-circle' %}
+{% include '_form_modal.html' with modal_id='menuEditModal' title="Menyuni tahrirlash" form=menu_edit_form action='' %}
+{% url 'meal_create' as meal_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi taom" form=form action=meal_url icon='egg-fried' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Taomni tahrirlash" form=edit_form action='' %}
+{% endblock %}

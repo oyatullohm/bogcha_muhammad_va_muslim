@@ -1,0 +1,85 @@
+{% extends 'base_auth.html' %}
+
+{% block title %}Kirish - Bog'cha{% endblock %}
+
+{% block form_content %}
+<h2>Xush kelibsiz! 👋</h2>
+<p class="subtitle">Tizimga kirish uchun ma'lumotlaringizni kiriting</p>
+
+{% if form.errors %}
+    <div class="alert alert-danger py-2 small">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        Login yoki parol noto'g'ri!
+    </div>
+{% endif %}
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} py-2 small">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+
+    <div class="form-floating mb-3">
+        <input type="text" name="username" class="form-control" id="id_username"
+               placeholder="Login" required autofocus>
+        <label for="id_username"><i class="bi bi-person me-1"></i> Login</label>
+    </div>
+
+    <div class="form-floating mb-3 position-relative">
+        <input type="password" name="password" class="form-control" id="id_password"
+               placeholder="Parol" required>
+        <label for="id_password"><i class="bi bi-lock me-1"></i> Parol</label>
+        <button type="button"
+                class="btn position-absolute top-50 end-0 translate-middle-y me-2 border-0"
+                onclick="togglePassword('id_password', 'toggleIcon')"
+                style="z-index: 5;">
+            <i class="bi bi-eye" id="toggleIcon"></i>
+        </button>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="remember" name="remember">
+            <label class="form-check-label small" for="remember">Eslab qolish</label>
+        </div>
+        <a href="#" class="small text-decoration-none">Parolni tiklash</a>
+    </div>
+
+    <button type="submit" class="btn btn-login w-100 mb-3">
+        <i class="bi bi-box-arrow-in-right me-2"></i> Kirish
+    </button>
+</form>
+
+<div class="divider">yoki</div>
+
+<a href="#" class="telegram-btn">
+    <i class="bi bi-telegram" style="color: #229ed9;"></i>
+    Telegram orqali kirish
+</a>
+
+<p class="text-center text-muted small mt-4 mb-0">
+    Hisobingiz yo'qmi?
+    <a href="{% url 'register' %}" class="text-decoration-none fw-semibold">Ro'yxatdan o'tish</a>
+</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function togglePassword(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    }
+</script>
+{% endblock %}

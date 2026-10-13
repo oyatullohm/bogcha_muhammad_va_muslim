@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Bildirishnomalar{% endblock %}
+{% block page_title %}Bildirishnomalar va bayramlar{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ===== Mening sozlamalarim: keraksizini o'chirib qo'yaman ===== -->
+  <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+    <h5><i class="bi bi-bell me-2"></i>Mening bildirishnomalarim</h5>
+    <p class="text-muted small">Faqat kerakli turlarni yoqib qoldiring. Qolganlari sizga ko'rinmaydi va Telegramga yuborilmaydi.</p>
+    {% if not user.telegram_id %}
+    <div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Telegram ID kiritilmagan — xabarlar faqat saytda ko'rinadi.</div>
+    {% endif %}
+    <form method="post" action="{% url 'my_preferences_save' %}">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="form-check form-switch mb-3 border-bottom pb-3">
+        <input class="form-check-input" type="checkbox" name="is_active" id="prefActive" {% if pref.is_active %}checked{% endif %}>
+        <label class="form-check-label fw-semibold" for="prefActive">Bildirishnomalar yoqilgan (umumiy)</label>
+      </div>
+      {% for t in types %}{% if t.is_active %}{% if t.code != 'payment_debt' or user.is_admin %}
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" name="enabled_types" value="{{ t.pk }}" id="nt{{ t.pk }}" {% if t.pk in enabled_ids %}checked{% endif %}>
+        <label class="form-check-label" for="nt{{ t.pk }}"><span class="fw-semibold">{{ t.name }}</span>
+          {% if t.description %}<div class="small text-muted">{{ t.description }}</div>{% endif %}</label>
+      </div>
+      {% endif %}{% endif %}{% endfor %}
+      <button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>Saqlash</button>
+    </form>
+  </div></div></div>
+
+  <!-- ===== Bayramlar ===== -->
+  <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+    <div class="d-flex justify-content-between mb-3">
+      <h5 class="mb-0"><i class="bi bi-balloon me-2"></i>Bayramlar</h5>
+      {% if user.is_admin %}<button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#holidayCreate"><i class="bi bi-plus-lg me-1"></i>Yangi bayram</button>{% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-hover">
+      <thead class="table-light"><tr><th>Bayram</th><th>Keyingi sana</th><th>Qolgan</th><th>Eslatma</th>{% if user.is_admin %}<th class="text-end"></th>{% endif %}</tr></thead>
+      <tbody>
+      {% for r in holidays %}{% with h=r.holiday %}
+        <tr class="{% if not h.is_active %}table-secondary{% endif %}">
+          <td class="fw-semibold">{{ h.name }}{% if not h.repeat_yearly %} <span class="badge bg-light text-dark border">bir martalik</span>{% endif %}
+            {% if h.note %}<div class="small text-muted">{{ h.note }}</div>{% endif %}</td>
+          <td>{% if r.next_date %}{{ r.next_date|date:"d.m.Y" }}{% else %}<span class="text-muted">o'tib ketgan</span>{% endif %}</td>
+          <td>{% if r.days_left == 0 %}<span class="badge bg-warning text-dark">Bugun!</span>{% elif r.days_left is not None %}{{ r.days_left }} kun{% else %}—{% endif %}</td>
+          <td>{{ h.remind_days_before }} kun oldin</td>
+          {% if user.is_admin %}
+          <td class="text-end text-nowrap">
+            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#holidayEdit" data-edit="#holidayEdit"
+              data-action="{% url 'holiday_update' h.pk %}" data-name="{{ h.name }}" data-date="{{ h.date|date:'Y-m-d' }}"
+              data-repeat_yearly="{{ h.repeat_yearly|yesno:'1,0' }}" data-remind_days_before="{{ h.remind_days_before }}"
+              data-note="{{ h.note }}" data-is_active="{{ h.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+            {% url 'holiday_delete' h.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Bayram o'chirilsinmi?" title="O'chirish" %}
+          </td>{% endif %}
+        </tr>
+      {% endwith %}{% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Bayram yo'q. Masalan: Yangi yil (1-yanvar), Navro'z (21-mart), Mustaqillik kuni (1-sentabr)</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  </div></div></div>
+
+  {% if user.is_admin %}
+  <!-- ===== Turlar (admin): faqat nom/tavsif/yoqish-o'chirish ===== -->
+  <div class="col-12"><div class="card"><div class="card-body">
+    <h5>Bildirishnoma turlari</h5>
+    <div class="small text-muted mb-2">Turlar tizim tomonidan tayyor. Bu yerda faqat nomini o'zgartirish yoki butunlay o'chirib qo'yish mumkin.</div>
+    <table class="table table-sm"><thead class="table-light"><tr><th>Kod</th><th>Nomi</th><th>Tavsif</th><th>Holat</th><th></th></tr></thead><tbody>
+    {% for t in types %}
+      <tr><td><code>{{ t.code }}</code></td><td>{{ t.name }}</td><td class="small text-muted">{{ t.description }}</td>
+        <td>{% if t.is_active %}<span class="badge bg-success">Faol</span>{% else %}<span class="badge bg-secondary">O'chiq</span>{% endif %}</td>
+        <td class="text-end"><button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#typeEdit" data-edit="#typeEdit"
+          data-action="{% url 'notification_type_update' t.pk %}" data-name="{{ t.name }}" data-description="{{ t.description }}" data-is_active="{{ t.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button></td></tr>
+    {% endfor %}
+    </tbody></table>
+  </div></div></div>
+
+  <!-- ===== Hamma foydalanuvchilar sozlamalari ===== -->
+  <div class="col-12"><div class="card"><div class="card-body">
+    <h5>Foydalanuvchilar kim nimani oladi</h5>
+    <div class="table-responsive"><table class="table table-sm"><thead class="table-light"><tr><th>Foydalanuvchi</th><th>Telegram</th><th>Holat</th><th>Oladigan turlari</th></tr></thead><tbody>
+    {% for p in all_prefs %}
+      <tr><td>{{ p.user.get_full_name|default:p.user.username }}</td>
+        <td>{% if p.user.telegram_id %}<i class="bi bi-check-circle text-success"></i>{% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}</td>
+        <td>{% if p.is_active %}<span class="badge bg-success">yoqilgan</span>{% else %}<span class="badge bg-secondary">o'chiq</span>{% endif %}</td>
+        <td>{% for t in p.enabled_types.all %}<span class="badge bg-light text-dark border">{{ t.name }}</span> {% empty %}<span class="text-muted">—</span>{% endfor %}</td></tr>
+    {% endfor %}
+    </tbody></table></div>
+  </div></div></div>
+  {% endif %}
+</div>
+
+{% if user.is_admin %}
+{% url 'holiday_create' as hc_url %}
+{% include '_form_modal.html' with modal_id='holidayCreate' title="Yangi bayram" form=holiday_form action=hc_url icon='balloon' size='' %}
+{% include '_form_modal.html' with modal_id='holidayEdit' title="Bayramni tahrirlash" form=holiday_edit_form action='' size='' %}
+{% include '_form_modal.html' with modal_id='typeEdit' title="Turni tahrirlash" form=type_edit_form action='' size='' %}
+{% endif %}
+{% endblock %}

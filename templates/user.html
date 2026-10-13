@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Foydalanuvchilar{% endblock %}
+{% block page_title %}Foydalanuvchilar{% endblock %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body">
+    <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+      <form method="get" class="d-flex gap-2">
+        <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Qidirish...">
+        <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+      </form>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+        <i class="bi bi-plus-lg me-1"></i>Yangi foydalanuvchi</button>
+    </div>
+
+    <div class="table-responsive">
+      <table class="table table-hover align-middle">
+        <thead class="table-light"><tr>
+          <th>Foydalanuvchi</th><th>Rol</th><th>Telefon</th><th>Tug'ilgan sana</th><th>Telegram ID</th><th>Holat</th><th class="text-end">Amallar</th>
+        </tr></thead>
+        <tbody>
+        {% for u in users %}
+          <tr class="{% if not u.is_active %}table-secondary{% endif %}">
+            <td>
+              <div class="d-flex align-items-center gap-2">
+                {% if u.photo %}<img src="{{ u.photo.url }}" class="rounded-circle" width="36" height="36" style="object-fit:cover">
+                {% else %}<div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center" style="width:36px;height:36px">{{ u.username|first|upper }}</div>{% endif %}
+                <div><div class="fw-semibold">{{ u.get_full_name|default:u.username }}</div><div class="small text-muted">@{{ u.username }}</div></div>
+              </div>
+            </td>
+            <td>{% if u.role == 'admin' %}<span class="badge bg-danger">Admin</span>{% else %}<span class="badge bg-info">Yordamchi</span>{% endif %}</td>
+            <td>{{ u.phone|default:"—" }}</td>
+            <td>{{ u.birth_date|date:"d.m.Y"|default:"—" }}</td>
+            <td>{{ u.telegram_id|default_if_none:"—" }}</td>
+            <td>{% if u.is_active %}<span class="badge bg-success">Faol</span>{% else %}<span class="badge bg-secondary">Arxiv</span>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" title="Tahrirlash"
+                data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+                data-action="{% url 'user_update' u.pk %}"
+                data-username="{{ u.username }}" data-first_name="{{ u.first_name }}" data-last_name="{{ u.last_name }}"
+                data-role="{{ u.role }}" data-phone="{{ u.phone|default_if_none:'' }}"
+                data-birth_date="{{ u.birth_date|date:'Y-m-d' }}" data-telegram_id="{{ u.telegram_id|default_if_none:''|unlocalize }}"
+                data-is_active="{{ u.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+              {% if u.pk != user.pk %}
+                {% url 'user_toggle' u.pk as t %}
+                {% if u.is_active %}{% include '_post_btn.html' with url=t icon='archive' cls='btn-outline-secondary' confirm="Foydalanuvchi arxivga olinsinmi?" title="Arxivga" %}
+                {% else %}{% include '_post_btn.html' with url=t icon='arrow-counterclockwise' cls='btn-outline-success' title="Faollashtirish" %}{% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Foydalanuvchi topilmadi</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% url 'user_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi foydalanuvchi" form=form action=create_url icon='person-plus' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Foydalanuvchini tahrirlash" form=edit_form action='' %}
+{% endblock %}

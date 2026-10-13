@@ -1,0 +1,22 @@
+
+<div class="modal fade" id="{{ modal_id }}" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog {{ size|default:'modal-lg' }} modal-dialog-scrollable">
+    <form method="post" action="{{ action }}" class="modal-content" enctype="multipart/form-data">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-{{ icon|default:'pencil-square' }} me-2"></i>{{ title }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          {% for field in form %}{% include '_field.html' %}{% endfor %}
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Bekor qilish</button>
+        <button type="submit" class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>{{ submit|default:"Saqlash" }}</button>
+      </div>
+    </form>
+  </div>
+</div>

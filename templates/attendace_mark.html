@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if action == 'out' %}Ketdim{% else %}Keldim{% endif %} — Bog'cha</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <style>body{min-height:100vh;display:flex;align-items:center;background:linear-gradient(135deg,#1e293b,#3b82f6)}</style>
+</head>
+<body>
+<div class="container" style="max-width:440px">
+  <div class="card border-0 shadow-lg rounded-4"><div class="card-body p-4 text-center">
+
+    {% if error %}
+      <i class="bi bi-x-circle-fill text-danger" style="font-size:3.5rem"></i>
+      <h5 class="mt-3">Havola ishlamaydi</h5>
+      <p class="text-muted mb-0">{{ error }}</p>
+    {% else %}
+      <div class="text-muted small">{{ teacher.full_name }}</div>
+      <h4 class="fw-bold mb-3">{% if action == 'out' %}🏠 Ketdim{% else %}📍 Keldim{% endif %}</h4>
+
+      <div id="stLoading">
+        <div class="spinner-border text-primary mb-3" role="status"></div>
+        <div class="fw-semibold">Joylashuv aniqlanmoqda…</div>
+        <div class="text-muted small mt-1">Brauzer ruxsat so'rasa, <b>«Ruxsat berish»</b> ni bosing.</div>
+      </div>
+
+      <div id="stOk" class="d-none">
+        <i class="bi bi-check-circle-fill text-success" style="font-size:3.5rem"></i>
+        <h5 class="mt-3" id="okMsg"></h5>
+        <div class="text-muted small">Sahifani yopishingiz mumkin.</div>
+      </div>
+
+      <div id="stErr" class="d-none">
+        <i class="bi bi-exclamation-triangle-fill text-danger" style="font-size:3.5rem"></i>
+        <h6 class="mt-3" id="errMsg"></h6>
+        <button class="btn btn-primary mt-2" id="retry"><i class="bi bi-arrow-repeat me-1"></i>Qayta urinish</button>
+      </div>
+    {% endif %}
+  </div></div>
+</div>
+
+{% if not error %}
+<script>
+  const $ = (id) => document.getElementById(id);
+  const show = (id) => ['stLoading', 'stOk', 'stErr'].forEach((x) => $(x).classList.toggle('d-none', x !== id));
+  const fail = (msg) => { $('errMsg').textContent = msg; show('stErr'); };
+
+  async function send(pos) {
+    try {
+      const r = await fetch(location.href, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({lat: pos.coords.latitude, lon: pos.coords.longitude, accuracy: pos.coords.accuracy}),
+      });
+      const d = await r.json();
+      if (d.ok) { $('okMsg').textContent = d.message; show('stOk'); } else { fail(d.message); }
+    } catch (e) { fail("Internet aloqasi yo'q. Qayta urinib ko'ring."); }
+  }
+
+  function locate() {
+    show('stLoading');
+    if (!window.isSecureContext) return fail("Sahifa xavfsiz (HTTPS) emas, joylashuvni olib bo'lmaydi. Adminga ayting.");
+    if (!navigator.geolocation) return fail("Telefoningiz joylashuvni qo'llab-quvvatlamaydi.");
+    navigator.geolocation.getCurrentPosition(send, (e) => {
+      fail(e.code === 1 ? "Joylashuvga ruxsat berilmadi. Brauzer sozlamalarida ruxsat bering va qayta urinib ko'ring."
+         : e.code === 3 ? "Joylashuv aniqlanmadi (vaqt tugadi). GPS yoqilganini tekshiring."
+         : "Joylashuvni aniqlab bo'lmadi. GPS yoqilganini tekshiring.");
+    }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 0});
+  }
+  $('retry').addEventListener('click', locate);
+  locate();                                   // sahifa ochilishi bilan avtomatik
+</script>
+{% endif %}
+</body>
+</html>

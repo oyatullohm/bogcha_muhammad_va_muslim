@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Tariflar{% endblock %}
+{% block page_title %}Tariflar{% endblock %}
+
+{% block content %}
+<div class="card"><div class="card-body">
+  <div class="d-flex justify-content-between mb-3">
+    <h5 class="mb-0">Tariflar</h5>
+    {% if user.is_admin %}<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi tarif</button>{% endif %}
+  </div>
+  <div class="alert alert-info small">
+    <i class="bi bi-info-circle me-1"></i>Aka-uka uchun "Maksimal bolalar" ni 2 yoki 3 qiling: bir oiladan hamma bola <b>bitta tarifda va bitta to'lovda</b> bo'ladi.
+  </div>
+  <div class="table-responsive"><table class="table table-hover">
+    <thead class="table-light"><tr><th>Nomi</th><th>Davr</th><th>Narxi</th><th>Maks. bola</th><th>Ulangan bolalar</th><th>Holat</th>{% if user.is_admin %}<th class="text-end">Amallar</th>{% endif %}</tr></thead>
+    <tbody>
+    {% for t in tariffs %}
+      <tr class="{% if not t.is_active %}table-secondary{% endif %}">
+        <td><div class="fw-semibold">{{ t.name }}</div><div class="small text-muted">{{ t.description|default:""|truncatechars:60 }}</div></td>
+        <td>{{ t.get_period_display }}</td>
+        <td class="fw-semibold">{{ t.price|floatformat:"0g" }} so'm</td>
+        <td>{% if t.max_children > 1 %}<span class="badge bg-info">{{ t.max_children }} tagacha (aka-uka)</span>{% else %}1{% endif %}</td>
+        <td><span class="badge bg-primary rounded-pill">{{ t.child_count }}</span></td>
+        <td>{% if t.is_active %}<span class="badge bg-success">Faol</span>{% else %}<span class="badge bg-secondary">Arxiv</span>{% endif %}</td>
+        {% if user.is_admin %}
+        <td class="text-end text-nowrap">
+          <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+            data-action="{% url 'tariff_update' t.pk %}" data-name="{{ t.name }}" data-period="{{ t.period }}" data-price="{{ t.price|unlocalize }}"
+            data-max_children="{{ t.max_children }}" data-description="{{ t.description|default_if_none:'' }}" data-is_active="{{ t.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+          {% url 'tariff_toggle' t.pk as tg %}
+          {% if t.is_active %}{% include '_post_btn.html' with url=tg icon='archive' cls='btn-outline-secondary' confirm="Tarif arxivga olinsinmi?" title="Arxivga" %}
+          {% else %}{% include '_post_btn.html' with url=tg icon='arrow-counterclockwise' cls='btn-outline-success' title="Faollashtirish" %}{% endif %}
+        </td>
+        {% endif %}
+      </tr>
+    {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Tarif yo'q</td></tr>{% endfor %}
+    </tbody></table></div>
+</div></div>
+
+{% if user.is_admin %}
+{% url 'tariff_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi tarif" form=form action=create_url icon='plus-circle' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Tarifni tahrirlash" form=edit_form action='' %}
+{% endif %}
+{% endblock %}

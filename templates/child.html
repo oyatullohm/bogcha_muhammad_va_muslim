@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Bolalar{% endblock %}
+{% block page_title %}Bolalar{% endblock %}
+
+{% block content %}
+<div class="card"><div class="card-body">
+  <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+    <form method="get" class="row g-2 flex-grow-1" style="max-width:760px">
+      <div class="col-md-4"><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Ism, ota-ona, telefon..."></div>
+      <div class="col-md-3"><select name="group" class="form-select" onchange="this.form.submit()">
+        <option value="">Barcha guruhlar</option>
+        {% for g in groups %}<option value="{{ g.pk }}" {% if g.pk == group_id %}selected{% endif %}>{{ g.name }}</option>{% endfor %}
+      </select></div>
+      <div class="col-md-3"><select name="status" class="form-select" onchange="this.form.submit()">
+        <option value="active" {% if status == 'active' %}selected{% endif %}>Faol</option>
+        <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Arxiv</option>
+        <option value="all" {% if status == 'all' %}selected{% endif %}>Hammasi</option>
+      </select></div>
+      <div class="col-md-2"><button class="btn btn-outline-secondary w-100"><i class="bi bi-search"></i></button></div>
+    </form>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi bola</button>
+  </div>
+  <div class="d-flex flex-wrap gap-3 small mb-2">
+    <span><span class="badge bg-success">&nbsp;</span> to'liq to'lagan</span>
+    <span><span class="badge bg-warning">&nbsp;</span> qisman (kam bergan)</span>
+    <span><span class="badge bg-danger">&nbsp;</span> umuman to'lamagan</span>
+  </div>
+  <div class="text-muted small mb-2">Jami: {{ total }} ta</div>
+
+  <div class="table-responsive"><table class="table table-hover">
+    <thead class="table-light"><tr><th>Bola</th><th>Tug'ilgan sana</th><th>Guruh</th><th>Ota-ona</th><th>Tarif</th><th>To'lov</th><th>Holat</th><th class="text-end">Amallar</th></tr></thead>
+    <tbody>
+    {% for c in children %}
+      <tr class="{% if not c.is_active %}table-secondary{% elif c.pay_status.code == 'paid' %}table-success{% elif c.pay_status.code == 'partial' %}table-warning{% elif c.pay_status.code == 'unpaid' %}table-danger{% endif %}">
+        <td><a href="?id={{ c.pk }}" class="fw-semibold text-decoration-none">{{ c.full_name }}</a>
+            <div class="small text-muted">{{ c.get_gender_display }}</div></td>
+        <td>{{ c.birth_date|date:"d.m.Y" }}</td>
+        <td>{{ c.group.name|default:"—" }}</td>
+        <td>{{ c.parent_name|default:"—" }}<div class="small text-muted">{{ c.parent_phone }}</div></td>
+        <td>{% if c.family_group %}<span class="badge bg-info"><i class="bi bi-people me-1"></i>aka-uka: {{ c.family_group.full_name }}</span>
+            {% else %}{{ c.tariff.name|default:"—" }}{% endif %}</td>
+        <td>{% include '_pay_badge.html' with st=c.pay_status %}</td>
+        <td>{% if c.is_active %}<span class="badge bg-success">Faol</span>{% else %}<span class="badge bg-secondary">Arxiv</span>{% endif %}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-info" href="?id={{ c.pk }}" title="Kartochka"><i class="bi bi-eye"></i></a>
+          <button class="btn btn-sm btn-outline-primary" title="Tahrirlash" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+            data-action="{% url 'child_update' c.pk %}" data-full_name="{{ c.full_name }}" data-birth_date="{{ c.birth_date|date:'Y-m-d' }}"
+            data-gender="{{ c.gender }}" data-parent_name="{{ c.parent_name|default_if_none:'' }}" data-parent_phone="{{ c.parent_phone }}"
+            data-group="{{ c.group_id|default_if_none:'' }}" data-tariff="{{ c.tariff_id|default_if_none:'' }}"
+            data-family_group="{{ c.family_group_id|default_if_none:'' }}" data-is_active="{{ c.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+          {% if user.is_admin %}{% url 'child_toggle' c.pk as tg %}
+            {% if c.is_active %}{% include '_post_btn.html' with url=tg icon='archive' cls='btn-outline-secondary' confirm="Bola arxivga olinsinmi?" title="Arxivga" %}
+            {% else %}{% include '_post_btn.html' with url=tg icon='arrow-counterclockwise' cls='btn-outline-success' title="Faollashtirish" %}{% endif %}
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}<tr><td colspan="8" class="text-center text-muted py-4">Bola topilmadi</td></tr>{% endfor %}
+    </tbody></table></div>
+  {% include '_pagination.html' %}
+</div></div>
+
+<!-- ============ BOLA KARTOCHKASI (modal) ============ -->
+{% if selected %}
+<div class="modal fade" id="detailModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class="bi bi-person-circle me-2"></i>{{ selected.child.full_name }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div class="border rounded p-3 mb-3">
+            <div class="text-muted small">Hisob balansi{% if selected.child.pk != selected.main.pk %} (asosiy: {{ selected.main.full_name }}){% endif %}</div>
+            {% if selected.account %}
+              {% if selected.balance < 0 %}<div class="fs-3 fw-bold text-danger">Qarz: {{ selected.balance|cut:"-"|floatformat:"0g" }} so'm</div>
+              {% elif selected.balance > 0 %}<div class="fs-3 fw-bold text-success">Ortiqcha: {{ selected.balance|floatformat:"0g" }} so'm</div>
+              {% else %}<div class="fs-3 fw-bold">0 so'm</div>{% endif %}
+            {% else %}<div class="text-muted">Hisob hali ochilmagan</div>{% endif %}
+            <div class="mt-2 d-flex flex-wrap gap-2">
+              <a class="btn btn-sm btn-success" href="{% url 'payment_list' %}?child={{ selected.child.pk }}&back={{ request.get_full_path|urlencode }}"><i class="bi bi-cash-coin me-1"></i>To'lov qabul qilish</a>
+              <a class="btn btn-sm btn-outline-info" href="?sibling_of={{ selected.child.pk }}"><i class="bi bi-person-plus me-1"></i>Aka-uka qo'shish</a>
+            </div>
+          </div>
+          <table class="table table-sm">
+            <tr><th class="text-muted">Tug'ilgan sana</th><td>{{ selected.child.birth_date|date:"d.m.Y" }}</td></tr>
+            <tr><th class="text-muted">Guruh</th><td>{{ selected.child.group.name|default:"—" }}</td></tr>
+            <tr><th class="text-muted">Ota-ona</th><td>{{ selected.child.parent_name|default:"—" }}</td></tr>
+            <tr><th class="text-muted">Telefon</th><td>{{ selected.child.parent_phone }}</td></tr>
+            <tr><th class="text-muted">Tarif</th><td>{% if selected.tariff %}{{ selected.tariff.name }} — {{ selected.tariff.price|floatformat:"0g" }} so'm{% else %}—{% endif %}</td></tr>
+          </table>
+          <h6 class="mt-3">Oila (aka-uka)</h6>
+          <div class="list-group list-group-flush">
+            {% for f in selected.family %}
+            <a class="list-group-item list-group-item-action py-1 {% if f.pk == selected.child.pk %}active{% endif %}" href="?id={{ f.pk }}">{{ f.full_name }}{% if f.pk == selected.main.pk %} <span class="badge bg-warning text-dark">asosiy</span>{% endif %}</a>
+            {% endfor %}
+          </div>
+        </div>
+
+        <div class="col-lg-7">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <h6 class="mb-0">Hisob harakatlari</h6>
+              <span class="badge bg-primary" title="{{ selected.month|date:'F Y' }}"><i class="bi bi-calendar-check me-1"></i>Shu oy kelgan: {{ selected.came_days }} kun</span>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#txCollapse"><i class="bi bi-plus-lg me-1"></i>Chegirma / jarima</button>
+          </div>
+          <div class="collapse mb-3" id="txCollapse"><form method="post" action="{% url 'transaction_create' selected.child.pk %}" class="border rounded p-3 bg-light">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            <div class="small text-muted mb-2">Shu oy <b>{{ selected.came_days }}</b> kun kelgan. Chegirma summasini o'zingiz kiritasiz (masalan: kelmagan kunlar uchun).</div>
+            <div class="row g-2">{% for field in transaction_form %}{% include '_field.html' %}{% endfor %}</div>
+            <button class="btn btn-primary btn-sm mt-2">Yozish</button>
+          </form></div>
+          <div class="table-responsive" style="max-height:260px"><table class="table table-sm">
+            <thead><tr><th>Sana</th><th>Tur</th><th class="text-end">Summa</th><th>Izoh</th><th>Kim</th></tr></thead><tbody>
+            {% for t in selected.transactions %}
+              <tr><td>{{ t.created_at|date:"d.m.Y H:i" }}</td><td>{{ t.get_type_display }}</td>
+                  <td class="text-end fw-semibold {% if t.amount < 0 %}text-danger{% else %}text-success{% endif %}">{{ t.amount|floatformat:"0g" }}</td>
+                  <td class="small text-muted">{{ t.comment|default:""|truncatechars:40 }}</td><td class="small text-muted">{{ t.created_by.username|default:"—" }}</td></tr>
+            {% empty %}<tr><td colspan="5" class="text-muted text-center">Hali harakat yo'q</td></tr>{% endfor %}
+          </tbody></table></div>
+
+          <h6 class="mt-3">So'nggi to'lovlar</h6>
+          <table class="table table-sm"><tbody>
+            {% for p in selected.payments %}
+              <tr><td>{{ p.paid_date|date:"d.m.Y" }}</td><td class="fw-semibold">{{ p.amount|floatformat:"0g" }} so'm</td>
+                  <td>{% if p.status == 'confirmed' %}<span class="badge bg-success">tasdiqlangan</span>{% elif p.status == 'cancelled' %}<span class="badge bg-secondary">bekor</span>{% else %}<span class="badge bg-warning text-dark">kutilmoqda</span>{% endif %}</td></tr>
+            {% empty %}<tr><td class="text-muted">To'lov yo'q</td></tr>{% endfor %}
+          </tbody></table>
+        </div>
+      </div>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+
+{% url 'child_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi bola" form=form action=create_url icon='person-plus' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Bolani tahrirlash" form=edit_form action='' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  {% if selected %}
+  const dm = document.getElementById('detailModal');
+  new bootstrap.Modal(dm).show();
+  dm.addEventListener('hidden.bs.modal', () => {            // yopilganda URL'dan ?id= ni olib tashlaymiz
+    const u = new URL(location); u.searchParams.delete('id'); history.replaceState(null, '', u);
+  });
+  {% endif %}
+  {% if open_create %}new bootstrap.Modal(document.getElementById('createModal')).show();{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block title %}To'lovlar{% endblock %}
+{% block page_title %}To'lovlar{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+  <ul class="nav nav-tabs border-0">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tolovlar"><i class="bi bi-cash-coin me-1"></i>To'lovlar</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#qarzdorlar"><i class="bi bi-exclamation-circle me-1"></i>Qarzdorlar <span class="badge bg-danger">{{ debtors|length }}</span></button></li>
+  </ul>
+  <div class="d-flex gap-2">
+    {% if user.is_admin %}<button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#chargeModal"><i class="bi bi-calendar-plus me-1"></i>Oylik hisoblash</button>{% endif %}
+    <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>To'lov qabul qilish</button>
+  </div>
+</div>
+
+<div class="tab-content">
+  <!-- ================= TO'LOVLAR ================= -->
+  <div class="tab-pane fade show active" id="tolovlar">
+    <div class="card"><div class="card-body">
+      <form method="get" class="row g-2 mb-3">
+        <div class="col-md-3"><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Bola yoki ota-ona..."></div>
+        <div class="col-md-2"><select name="status" class="form-select">
+          <option value="">Hamma holat</option>
+          {% for k, v in status_choices %}<option value="{{ k }}" {% if k == status %}selected{% endif %}>{{ v }}</option>{% endfor %}
+        </select></div>
+        <div class="col-md-2"><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-control"></div>
+        <div class="col-md-2"><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-control"></div>
+        <div class="col-md-1"><button class="btn btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button></div>
+        <div class="col-md-2 text-md-end"><div class="small text-muted">Jami (tasdiqlangan)</div><div class="fw-bold text-success fs-5">{{ total_amount|floatformat:"0g" }} so'm</div></div>
+      </form>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Sana</th><th>Bola(lar)</th><th class="text-end">Summa</th><th>Holat</th><th>Qabul qildi</th><th>Izoh</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for p in payments %}
+          <tr class="{% if p.status == 'cancelled' %}text-decoration-line-through text-muted{% endif %}">
+            <td>{{ p.paid_date|date:"d.m.Y" }}</td>
+            <td>{% for c in p.children.all %}<a class="text-decoration-none" href="{% url 'child_list' %}?id={{ c.pk }}">{{ c.full_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td class="text-end fw-semibold">{{ p.amount|floatformat:"0g" }}</td>
+            <td>{% if p.status == 'confirmed' %}<span class="badge bg-success">Tasdiqlangan</span>{% elif p.status == 'cancelled' %}<span class="badge bg-secondary">Bekor</span>{% else %}<span class="badge bg-warning text-dark">Kutilmoqda</span>{% endif %}</td>
+            <td>{{ p.received_by.get_full_name|default:p.received_by.username|default:"—" }}</td>
+            <td class="small text-muted">{{ p.comment|default:""|truncatechars:30 }}</td>
+            {% if user.is_admin %}<td class="text-end">{% if p.status != 'cancelled' %}{% url 'payment_cancel' p.pk as cu %}{% include '_post_btn.html' with url=cu icon='x-circle' confirm="To'lov bekor qilinsinmi? Pul hisobdan qaytariladi." title="Bekor qilish" %}{% endif %}</td>{% endif %}
+          </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">To'lov topilmadi</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% include '_pagination.html' %}
+    </div></div>
+  </div>
+
+  <!-- ================= QARZDORLAR ================= -->
+  <div class="tab-pane fade" id="qarzdorlar">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-3">
+        <h5 class="mb-0">Qarzdor oilalar</h5>
+        <span class="badge bg-danger fs-6">Jami qarz: {{ debt_total|floatformat:"0g" }} so'm</span>
+      </div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Bola (asosiy)</th><th>Guruh</th><th>Ota-ona</th><th class="text-end">Qarz</th><th></th></tr></thead>
+        <tbody>
+        {% for a in debtors %}
+          {% widthratio a.balance_sum 1 -1 as debt %}
+          <tr>
+            <td><a class="fw-semibold text-decoration-none" href="{% url 'child_list' %}?id={{ a.child.pk }}">{{ a.child.full_name }}</a></td>
+            <td>{{ a.child.group.name|default:"—" }}</td>
+            <td>{{ a.child.parent_name|default:"" }} <span class="text-muted">{{ a.child.parent_phone }}</span></td>
+            <td class="text-end fw-bold text-danger">{{ debt|floatformat:"0g" }}</td>
+            <td class="text-end"><a class="btn btn-sm btn-success" href="?child={{ a.child.pk }}"><i class="bi bi-cash-coin me-1"></i>To'lov</a></td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-success py-4">Qarzdor yo'q 🎉</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+</div>
+
+<!-- ================= TO'LOV OYNASI: bitta bola, qidiruv bilan ================= -->
+<div class="modal fade" id="createModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <form method="post" action="{% url 'payment_create' %}" class="modal-content" id="payForm">
+      {% csrf_token %}
+      <input type="hidden" name="next" value="{% if back %}{{ back }}{% else %}{% url 'payment_list' %}{% endif %}">
+      <input type="hidden" name="child" id="payChild" value="">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>To'lov qabul qilish</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- 1) Bolani qidirib tanlash -->
+        <div id="pickBox">
+          <label class="form-label fw-semibold small">Bolani qidiring <span class="text-muted fw-normal">(ism, ota-ona yoki telefon)</span></label>
+          <input type="search" id="childQ" class="form-control form-control-lg" placeholder="Masalan: Ali" autocomplete="off">
+          <div class="list-group mt-2" id="childResults"></div>
+        </div>
+
+        <!-- 2) Tanlangan bola + summa -->
+        <div id="chosenBox" class="d-none">
+          <div class="border rounded p-3 bg-light mb-3">
+            <div class="d-flex justify-content-between align-items-start gap-2">
+              <div>
+                <div class="fs-5 fw-bold" id="chName"></div>
+                <div class="small text-muted" id="chMeta"></div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="chChange">O'zgartirish</button>
+            </div>
+            <div class="small mt-2 text-primary" id="chFamily"></div>
+            <div class="row g-2 text-center mt-1">
+              <div class="col-4"><div class="small text-muted">Tarif</div><div class="fw-semibold" id="chTariff">—</div></div>
+              <div class="col-4"><div class="small text-muted">Shu oy to'langan</div><div class="fw-semibold text-success" id="chPaid">0</div></div>
+              <div class="col-4"><div class="small text-muted">Qolgan</div><div class="fw-bold text-danger" id="chDue">0</div></div>
+            </div>
+            <div class="mt-2"><span class="badge" id="chStatus"></span></div>
+          </div>
+          <div class="row g-3">
+            <div class="col-12">
+              <label class="form-label fw-semibold small mb-1">Summa (so'm) <span class="text-danger">*</span></label>
+              {{ form.amount }}
+              <div class="form-text">Qolgan summa avtomatik qo'yiladi. Qisman to'lasa o'zgartirishingiz mumkin.</div>
+            </div>
+            <div class="col-md-6"><label class="form-label fw-semibold small mb-1">Sana</label>{{ form.paid_date }}</div>
+            <div class="col-md-6"><label class="form-label fw-semibold small mb-1">Izoh</label>{{ form.comment }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-light" data-bs-dismiss="modal">Bekor qilish</button>
+        <button type="submit" class="btn btn-success" id="paySubmit" disabled><i class="bi bi-check2-circle me-1"></i>To'lovni saqlash</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% if user.is_admin %}
+{% url 'charge_month' as charge_url %}
+{% include '_form_modal.html' with modal_id='chargeModal' title="Oylik hisoblash" form=charge_form action=charge_url icon='calendar-plus' size='' submit="Hisoblash" %}
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if pay_child %}{{ pay_child|json_script:"payChildData" }}{% endif %}
+<script>
+  const $ = (id) => document.getElementById(id);
+  const fmt = (n) => Number(n).toLocaleString('ru-RU');
+  const infoUrl = "{% url 'payment_child_info' 0 %}";
+  const searchUrl = "{% url 'payment_child_search' %}";
+  const dot = {paid: 'success', partial: 'warning', unpaid: 'danger', none: 'secondary'};
+
+  function showChild(d, fillAmount = true) {
+    $('payChild').value = d.id;
+    $('chName').textContent = d.name;
+    $('chMeta').textContent = [d.group, d.parent, d.phone].filter(Boolean).join(' · ');
+    $('chFamily').textContent = d.family.length > 1
+      ? "👨‍👩‍👧 Oila: " + d.family.join(', ') + " — to'lov umumiy hisobga tushadi" : '';
+    $('chTariff').textContent = d.price ? fmt(d.price) : '—';
+    $('chPaid').textContent = fmt(d.paid);
+    $('chDue').textContent = fmt(d.due);
+    const st = $('chStatus');
+    st.className = 'badge bg-' + dot[d.status] + (d.status === 'partial' ? ' text-dark' : '');
+    st.textContent = d.status === 'none' ? "Hisob ochilmagan" : d.status_label;
+    if (fillAmount) $('id_amount').value = d.due > 0 ? d.due : '';
+    $('pickBox').classList.add('d-none');
+    $('chosenBox').classList.remove('d-none');
+    $('paySubmit').disabled = false;
+  }
+
+  function resetPick() {
+    $('payChild').value = '';
+    $('chosenBox').classList.add('d-none');
+    $('pickBox').classList.remove('d-none');
+    $('paySubmit').disabled = true;
+    $('childQ').value = ''; $('childResults').innerHTML = '';
+    $('childQ').focus();
+  }
+  $('chChange').addEventListener('click', resetPick);
+
+  // Qidiruv (yozishni to'xtatgach 250ms kutadi)
+  let timer;
+  $('childQ').addEventListener('keydown', (e) => { if (e.key === 'Enter') e.preventDefault(); });
+  $('childQ').addEventListener('input', () => {
+    clearTimeout(timer);
+    const q = $('childQ').value.trim();
+    if (!q) { $('childResults').innerHTML = ''; return; }
+    timer = setTimeout(async () => {
+      const data = await (await fetch(searchUrl + '?q=' + encodeURIComponent(q))).json();
+      const box = $('childResults'); box.innerHTML = '';
+      if (!data.results.length) { box.innerHTML = '<div class="list-group-item text-muted">Topilmadi</div>'; return; }
+      data.results.forEach((c) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+        const left = document.createElement('div');
+        const nm = document.createElement('div'); nm.className = 'fw-semibold'; nm.textContent = c.name;
+        const mt = document.createElement('div'); mt.className = 'small text-muted';
+        mt.textContent = [c.group, c.parent, c.phone].filter(Boolean).join(' · ');
+        left.append(nm, mt);
+        const badge = document.createElement('span'); badge.className = 'badge rounded-pill bg-' + dot[c.status]; badge.innerHTML = '&nbsp;&nbsp;';
+        b.append(left, badge);
+        b.addEventListener('click', async () => {
+          const d = await (await fetch(infoUrl.replace('/0/', '/' + c.id + '/'))).json();
+          showChild(d);
+        });
+        box.appendChild(b);
+      });
+    }, 250);
+  });
+
+  // Modal ochilganda: bola oldindan tanlanmagan bo'lsa qidiruvga fokus
+  $('createModal').addEventListener('shown.bs.modal', () => { if (!$('payChild').value) $('childQ').focus(); });
+
+  {% if pay_child %}
+  // Bola boshqa sahifadan (guruh, bola kartochkasi, qarzdorlar) kelgan: FAQAT shu bola ko'rinadi
+  showChild(JSON.parse($('payChildData').textContent), false);
+  {% endif %}
+  {% if open_create %}new bootstrap.Modal($('createModal')).show();{% endif %}
+</script>
+{% endblock %}

@@ -1,0 +1,4 @@
+{% if st.code == 'paid' %}<span class="badge bg-success">To'langan</span>
+{% elif st.code == 'partial' %}<span class="badge bg-warning text-dark">Qisman · qoldi {{ st.due|floatformat:"0g" }}</span>
+{% elif st.code == 'unpaid' %}<span class="badge bg-danger">To'lamagan · {{ st.due|floatformat:"0g" }}</span>
+{% else %}<span class="badge bg-light text-muted border">—</span>{% endif %}

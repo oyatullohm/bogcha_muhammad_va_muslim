@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}{{ group.name }}{% endblock %}
+{% block page_title %}{{ group.name }} — bolalar va davomat{% endblock %}
+
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+  <a href="{% url 'group_list' %}" class="btn btn-light"><i class="bi bi-arrow-left me-1"></i>Guruhlar</a>
+  <div class="text-muted"><i class="bi bi-person-badge me-1"></i>Tarbiyachi: <b>{{ group.teacher.full_name|default:"—" }}</b> · Bolalar: <b>{{ rows|length }}</b></div>
+</div>
+
+<div class="row g-3">
+
+  <!-- ================= KUNLIK "KELDI" ================= -->
+  <div class="col-12"><div class="card"><div class="card-body">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+      <div class="d-flex align-items-center gap-2">
+        <a class="btn btn-outline-secondary" href="?date={{ prev_day|date:'Y-m-d' }}"><i class="bi bi-chevron-left"></i></a>
+        <form method="get"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" class="form-control" onchange="this.form.submit()"></form>
+        {% if next_day %}<a class="btn btn-outline-secondary" href="?date={{ next_day|date:'Y-m-d' }}"><i class="bi bi-chevron-right"></i></a>{% endif %}
+        {% if day != today %}<a class="btn btn-outline-primary" href="?">Bugun</a>{% endif %}
+      </div>
+      <span class="badge bg-success fs-6">{{ day|date:"d.m.Y" }} kelgan: <span id="presentCount">{{ present_count }}</span> / {{ rows|length }}</span>
+    </div>
+
+    <form method="post" action="{% url 'group_attendance_save' group.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="date" value="{{ day|date:'Y-m-d' }}">
+      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <div class="table-responsive"><table class="table table-hover align-middle">
+        <thead class="table-light"><tr>
+          <th style="width:70px"><input class="form-check-input" type="checkbox" id="checkAll" title="Hammasini belgilash" style="width:1.3em;height:1.3em"></th>
+          <th>Bola</th><th>To'lov</th><th class="text-center">{{ month_start|date:"F" }} oyida kelgan</th><th></th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr class="{% if r.status.code == 'paid' %}table-success{% elif r.status.code == 'partial' %}table-warning{% elif r.status.code == 'unpaid' %}table-danger{% endif %}">
+            <td><input class="form-check-input child-check" type="checkbox" name="present" value="{{ r.child.pk }}" id="c{{ r.child.pk }}" {% if r.came_today %}checked{% endif %} style="width:1.4em;height:1.4em"></td>
+            <td><label for="c{{ r.child.pk }}" class="fw-semibold mb-0" style="cursor:pointer">{{ r.child.full_name }}</label>
+                <div class="small text-muted">{{ r.child.parent_phone }}</div></td>
+            <td>{% include '_pay_badge.html' with st=r.status %}</td>
+            <td class="text-center"><span class="badge bg-primary rounded-pill">{{ r.count }}</span> kun</td>
+            <td class="text-end text-nowrap">
+              <a class="btn btn-sm btn-outline-info" href="?date={{ day|date:'Y-m-d' }}&cal={{ r.child.pk }}"><i class="bi bi-calendar3 me-1"></i>Kalendar</a>
+              <a class="btn btn-sm btn-outline-success" href="{% url 'payment_list' %}?child={{ r.child.pk }}&back={{ request.get_full_path|urlencode }}" title="To'lov qabul qilish"><i class="bi bi-cash-coin"></i></a>
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Bu guruhda faol bola yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+      {% if rows %}<button class="btn btn-primary"><i class="bi bi-check2-circle me-1"></i>{{ day|date:"d.m.Y" }} davomatini saqlash</button>{% endif %}
+    </form>
+  </div></div></div>
+
+  <!-- ================= OYLIK JADVAL ================= -->
+  <div class="col-12"><div class="card"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h5 class="mb-0">{{ month_start|date:"F Y" }} — oylik davomat</h5>
+      <div class="d-flex gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="?date={{ prev_month|date:'Y-m-d' }}"><i class="bi bi-chevron-left"></i></a>
+        {% if next_month %}<a class="btn btn-sm btn-outline-secondary" href="?date={{ next_month|date:'Y-m-d' }}"><i class="bi bi-chevron-right"></i></a>{% endif %}
+      </div>
+    </div>
+    <div class="table-responsive"><table class="table table-sm table-bordered text-center mb-0" style="font-size:.8rem">
+      <thead><tr><th class="text-start">Bola</th>
+        {% for d in days %}<th class="{% if d.weekend %}bg-light text-muted{% endif %}">{{ d.date.day }}</th>{% endfor %}<th>Jami</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td class="text-start text-nowrap">{{ r.child.full_name }}</td>
+          {% for c in r.cells %}<td class="{% if c.came %}table-success fw-bold{% elif c.weekend %}bg-light{% elif c.future %}text-muted{% endif %}">{% if c.came %}✔{% endif %}</td>{% endfor %}
+          <td class="fw-bold">{{ r.count }}</td></tr>
+      {% endfor %}
+      </tbody></table></div>
+  </div></div></div>
+</div>
+
+<!-- ================= BOLA KALENDARI (modal) ================= -->
+{% if cal_child %}
+<div class="modal fade" id="calModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header">
+      <h5 class="modal-title"><i class="bi bi-calendar3 me-2"></i>{{ cal_child.full_name }} — {{ month_start|date:"F Y" }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+    </div>
+    <div class="modal-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="fs-5">Kelgan: <span class="badge bg-success">{{ cal_dates|length }} kun</span></div>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="?date={{ prev_month|date:'Y-m-d' }}&cal={{ cal_child.pk }}"><i class="bi bi-chevron-left"></i></a>
+          {% if next_month %}<a class="btn btn-sm btn-outline-secondary" href="?date={{ next_month|date:'Y-m-d' }}&cal={{ cal_child.pk }}"><i class="bi bi-chevron-right"></i></a>{% endif %}
+        </div>
+      </div>
+      <table class="table table-bordered text-center mb-3" style="table-layout:fixed">
+        <thead class="table-light"><tr><th>Du</th><th>Se</th><th>Ch</th><th>Pa</th><th>Ju</th><th>Sh</th><th>Ya</th></tr></thead>
+        <tbody>
+        {% for week in cal_weeks %}<tr>
+          {% for d in week %}
+          <td class="p-1 {% if not d.in_month %}bg-light text-muted opacity-50{% elif d.data %}table-success{% elif d.weekend %}bg-light{% endif %}" style="height:58px;vertical-align:top">
+            <div class="small text-start">{{ d.date.day }}</div>
+            {% if d.in_month and d.data %}<div class="fs-5 text-success">✔</div>{% endif %}
+          </td>{% endfor %}
+        </tr>{% endfor %}
+        </tbody></table>
+      <div class="small text-muted">Kelgan sanalar:
+        {% for d in cal_dates %}<span class="badge bg-success-subtle text-success">{{ d|date:"d.m" }}</span> {% empty %}—{% endfor %}</div>
+    </div>
+  </div></div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // Hammasini belgilash + sanagich
+  const checks = [...document.querySelectorAll('.child-check')];
+  const all = document.getElementById('checkAll');
+  const counter = document.getElementById('presentCount');
+  const refresh = () => {
+    counter.textContent = checks.filter(c => c.checked).length;
+    all.checked = checks.length && checks.every(c => c.checked);
+  };
+  all?.addEventListener('change', () => { checks.forEach(c => c.checked = all.checked); refresh(); });
+  checks.forEach(c => c.addEventListener('change', refresh));
+  refresh();
+
+  {% if cal_child %}
+  const cm = document.getElementById('calModal');
+  new bootstrap.Modal(cm).show();
+  cm.addEventListener('hidden.bs.modal', () => {            // yopilganda URL'dan ?cal= ni olib tashlaymiz
+    const u = new URL(location); u.searchParams.delete('cal'); history.replaceState(null, '', u);
+  });
+  {% endif %}
+</script>
+{% endblock %}

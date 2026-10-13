@@ -1,0 +1,163 @@
+{% extends 'base_auth.html' %}
+
+{% block title %}Ro'yxatdan o'tish - Bog'cha{% endblock %}
+
+{% block side_content %}
+<h1>Hisob yarating ✨</h1>
+<p>Tizimga qo'shiling va bog'chani boshqarishni boshlang.</p>
+
+<ul class="features">
+    <li><i class="bi bi-check-circle-fill"></i> Bepul ro'yxatdan o'tish</li>
+    <li><i class="bi bi-check-circle-fill"></i> Xavfsiz ma'lumotlar</li>
+    <li><i class="bi bi-check-circle-fill"></i> Tez boshlash</li>
+    <li><i class="bi bi-check-circle-fill"></i> 24/7 qo'llab-quvvatlash</li>
+</ul>
+{% endblock %}
+
+{% block form_content %}
+<h2>Ro'yxatdan o'tish</h2>
+<p class="subtitle">Ma'lumotlaringizni to'ldiring</p>
+
+{% if form.errors %}
+    <div class="alert alert-danger py-2 small">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        Iltimos, xatolarni to'g'rilang!
+        <ul class="mb-0 mt-1 ps-3">
+            {% for field, errors in form.errors.items %}
+                {% for error in errors %}
+                    <li>{{ error }}</li>
+                {% endfor %}
+            {% endfor %}
+        </ul>
+    </div>
+{% endif %}
+
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} py-2 small">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+
+<form method="post" novalidate id="registerForm">
+    {% csrf_token %}
+
+    <!-- Ism va Familiya -->
+    <div class="row g-2 mb-2">
+        <div class="col-6">
+            <div class="form-floating">
+                <input type="text" name="first_name" class="form-control"
+                       id="id_first_name" placeholder="Ism" required>
+                <label for="id_first_name"><i class="bi bi-person me-1"></i> Ism</label>
+            </div>
+        </div>
+        <div class="col-6">
+            <div class="form-floating">
+                <input type="text" name="last_name" class="form-control"
+                       id="id_last_name" placeholder="Familiya" required>
+                <label for="id_last_name"><i class="bi bi-person me-1"></i> Familiya</label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Username -->
+    <div class="form-floating mb-2">
+        <input type="text" name="username" class="form-control"
+               id="id_username" placeholder="Login" required
+               value="{{ form.username.value|default:'' }}">
+        <label for="id_username"><i class="bi bi-at me-1"></i> Login</label>
+    </div>
+
+    <!-- Telefon -->
+    <div class="form-floating mb-2">
+        <input type="tel" name="phone" class="form-control"
+               id="id_phone" placeholder="+998 90 123 45 67"
+               value="{{ form.phone.value|default:'' }}">
+        <label for="id_phone"><i class="bi bi-telephone me-1"></i> Telefon raqam</label>
+    </div>
+    <div class="form-floating mb-2">
+        <input type="date" name="birthdate" class="form-control"
+               id="id_birthdate" placeholder="Tug'ilgan sana" required
+               value="{{ form.birthdate.value|default:'' }}">
+        <label for="id_birthdate"><i class="bi bi-calendar me-1"></i> Tug'ilgan sana</label>
+    </div>
+    
+
+    <!-- Parol -->
+    <div class="form-floating mb-2 position-relative">
+        <input type="password" name="password1" class="form-control"
+               id="id_password1" placeholder="Parol" required
+               oninput="checkStrength(this.value)">
+        <label for="id_password1"><i class="bi bi-lock me-1"></i> Parol</label>
+        <button type="button"
+                class="btn position-absolute top-50 end-0 translate-middle-y me-2 border-0"
+              
+                style="z-index: 5;">
+            <i class="bi bi-eye" id="toggleIcon1"></i>
+        </button>
+    </div>
+    <div class="password-strength mb-2">
+        <div class="bar" id="strengthBar"></div>
+    </div>
+
+
+
+    <!-- Shartlar -->
+
+
+    <button type="submit" class="btn btn-login w-100 mb-3">
+        <i class="bi bi-person-plus me-2"></i> Ro'yxatdan o'tish
+    </button>
+</form>
+
+<p class="text-center text-muted small mt-4 mb-0">
+    Hisobingiz bormi?
+    <a href="{% url 'login' %}" class="text-decoration-none fw-semibold">Kirish</a>
+</p>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Parolni ko'rsatish/yashirish
+    function togglePassword(inputId, iconId) {
+        const input = document.getElementById(inputId);
+        const icon = document.getElementById(iconId);
+        if (input.type === 'password') {
+            input.type = 'text';
+            icon.classList.replace('bi-eye', 'bi-eye-slash');
+        } else {
+            input.type = 'password';
+            icon.classList.replace('bi-eye-slash', 'bi-eye');
+        }
+    }
+
+    // Parol kuchini tekshirish
+    function checkStrength(password) {
+        const bar = document.getElementById('strengthBar');
+        bar.className = 'bar';
+
+        if (password.length === 0) {
+            bar.style.width = '0';
+            return;
+        }
+
+        let score = 0;
+        if (password.length >= 8) score++;
+        if (/[a-z]/.test(password) && /[A-Z]/.test(password)) score++;
+        if (/\d/.test(password)) score++;
+        if (/[^a-zA-Z\d]/.test(password)) score++;
+
+        if (score <= 1) {
+            bar.classList.add('strength-weak');
+        } else if (score <= 2) {
+            bar.classList.add('strength-medium');
+        } else {
+            bar.classList.add('strength-strong');
+        }
+    }
+
+
+
+</script>
+{% endblock %}

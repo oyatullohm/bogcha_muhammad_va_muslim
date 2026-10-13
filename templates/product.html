@@ -1,0 +1,129 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Ombor{% endblock %}
+{% block page_title %}Oshxona ombori{% endblock %}
+
+{% block content %}
+<div class="card mb-3"><div class="card-body py-2">
+  <form method="get" class="row g-2 align-items-center">
+    <div class="col-md-3"><input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Mahsulot nomi..."></div>
+    <div class="col-md-2"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="low" value="1" id="lowChk" {% if low %}checked{% endif %}>
+      <label class="form-check-label" for="lowChk">Faqat tugayotgan {% if low_count %}<span class="badge bg-danger">{{ low_count }}</span>{% endif %}</label></div></div>
+    <div class="col-md-2"><input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}" class="form-control" title="Kirim/chiqim: dan"></div>
+    <div class="col-md-2"><input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}" class="form-control" title="Kirim/chiqim: gacha"></div>
+    <div class="col-md-1"><button class="btn btn-outline-secondary w-100"><i class="bi bi-funnel"></i></button></div>
+  </form>
+</div></div>
+
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#mahsulotlar"><i class="bi bi-basket me-1"></i>Mahsulotlar</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#kirim"><i class="bi bi-box-arrow-in-down me-1"></i>Kirim</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#chiqim"><i class="bi bi-box-arrow-up me-1"></i>Chiqim</button></li>
+</ul>
+
+<div class="tab-content">
+
+  <!-- ================= MAHSULOTLAR ================= -->
+  <div class="tab-pane fade show active" id="mahsulotlar">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-3"><h5 class="mb-0">Ombordagi mahsulotlar</h5>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi mahsulot</button></div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Nomi</th><th class="text-end">Qoldiq</th><th class="text-end">Minimal</th><th class="text-end" title="Jami kirim summasi / jami kirim miqdori">O'rtacha narx</th><th>Holat</th><th class="text-end">Amallar</th></tr></thead>
+        <tbody>
+        {% for p in products %}
+          <tr class="{% if p.is_low %}table-danger{% endif %}">
+            <td class="fw-semibold">{{ p.name }}</td>
+            <td class="text-end fw-bold">{{ p.quantity|floatformat:"-3" }} {{ p.unit }}</td>
+            <td class="text-end text-muted">{{ p.min_quantity|floatformat:"-3" }} {{ p.unit }}</td>
+            <td class="text-end">{{ p.avg_price|floatformat:"0g" }} <span class="text-muted small">/ {{ p.unit }}</span></td>
+            <td>{% if p.is_low %}<span class="badge bg-danger">Tugayapti</span>{% else %}<span class="badge bg-success">Yetarli</span>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+                data-action="{% url 'product_update' p.pk %}" data-name="{{ p.name }}" data-unit="{{ p.unit }}" data-min_quantity="{{ p.min_quantity|unlocalize }}"><i class="bi bi-pencil"></i></button>
+              {% if user.is_admin %}{% url 'product_delete' p.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Mahsulot va uning butun kirim/chiqim tarixi o'chadi. Davom etasizmi?" title="O'chirish" %}{% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Mahsulot yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+
+  <!-- ================= KIRIM ================= -->
+  <div class="tab-pane fade" id="kirim">
+    <div class="card"><div class="card-body">
+      <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+        <div><h5 class="mb-0">Omborga kirim</h5><div class="text-success fw-semibold">Jami xarid: {{ in_total|floatformat:"0g" }} so'm</div>
+          <div class="small text-muted">Kirim avtomatik "Oziq-ovqat" chiqimiga yoziladi.</div></div>
+        <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#inModal"><i class="bi bi-plus-lg me-1"></i>Kirim qilish</button>
+      </div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Sana</th><th>Mahsulot</th><th class="text-end">Miqdor</th><th class="text-end">Summa</th><th>Yetkazuvchi</th><th>Kiritdi</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for i in ins %}
+          <tr><td>{{ i.date|date:"d.m.Y" }}</td><td class="fw-semibold">{{ i.product.name }}</td>
+            <td class="text-end text-success">+ {{ i.quantity|floatformat:"-3" }} {{ i.product.unit }}</td>
+            <td class="text-end">{{ i.total_price|floatformat:"0g" }}</td><td>{{ i.supplier|default:"—" }}</td><td class="small text-muted">{{ i.created_by.username|default:"—" }}</td>
+            {% if user.is_admin %}<td class="text-end">{% url 'product_in_delete' i.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Kirim o'chirilsinmi? (ombor qoldig'i va chiqim ham tuzatiladi)" title="O'chirish" %}</td>{% endif %}</tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Kirim yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+
+  <!-- ================= CHIQIM ================= -->
+  <div class="tab-pane fade" id="chiqim">
+    <div class="card"><div class="card-body">
+      <div class="d-flex justify-content-between mb-3"><div><h5 class="mb-0">Ombordan chiqim (oshxonaga)</h5><div class="text-danger fw-semibold">Jami: {{ out_total|floatformat:"0g" }} so'm</div>
+          <div class="small text-muted">Taomni belgilasangiz, taomning narxi avtomatik hisoblanadi.</div></div>
+        <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#outModal"><i class="bi bi-dash-lg me-1"></i>Chiqim qilish</button></div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Sana</th><th>Mahsulot</th><th class="text-end">Miqdor</th><th>Qaysi taom uchun</th><th class="text-end">Narxi</th><th>Kiritdi</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for o in outs %}
+          <tr><td>{{ o.date|date:"d.m.Y" }}</td><td class="fw-semibold">{{ o.product.name }}</td>
+            <td class="text-end text-danger">− {{ o.quantity|floatformat:"-3" }} {{ o.product.unit }}</td>
+            <td>{% if o.menu %}<span class="badge bg-warning-subtle text-dark border">{{ o.menu.get_meal_time_display }} · {{ o.menu.meal.name }}</span>{% else %}<span class="text-muted small">—</span>{% endif %}</td>
+            <td class="text-end">{% if o.cost %}{{ o.cost|floatformat:"0g" }}{% else %}<span class="text-muted">—</span>{% endif %}</td><td class="small text-muted">{{ o.created_by.username|default:"—" }}</td>
+            {% if user.is_admin %}<td class="text-end">{% url 'product_out_delete' o.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Chiqim o'chirilsinmi? (miqdor omborga qaytadi)" title="O'chirish" %}</td>{% endif %}</tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Chiqim yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+</div>
+
+{% url 'product_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi mahsulot" form=form action=create_url icon='plus-circle' size='' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Mahsulotni tahrirlash" form=edit_form action='' size='' %}
+{% url 'product_in_create' as in_url %}
+{% include '_form_modal.html' with modal_id='inModal' title="Omborga kirim" form=in_form action=in_url icon='box-arrow-in-down' %}
+{% url 'product_out_create' as out_url %}
+{% include '_form_modal.html' with modal_id='outModal' title="Ombordan chiqim" form=out_form action=out_url icon='box-arrow-up' size='' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const outModal = document.getElementById('outModal');
+  if (outModal) {
+    const dateEl = outModal.querySelector('[name=date]');
+    const menuEl = outModal.querySelector('[name=menu]');
+    // Tanlangan sanaga tegishli taomlarnigina ko'rsatadi
+    const filterMenu = () => {
+      let hiddenSelected = false;
+      [...menuEl.options].forEach((o) => {
+        if (!o.value) return;
+        const show = o.dataset.date === dateEl.value;
+        o.hidden = !show; o.disabled = !show;
+        if (!show && o.selected) hiddenSelected = true;
+      });
+      if (hiddenSelected) menuEl.value = '';
+    };
+    dateEl.addEventListener('change', filterMenu);
+    outModal.addEventListener('show.bs.modal', filterMenu);
+    filterMenu();
+  }
+  {% if open_out %}
+  document.querySelector('[data-bs-target="#chiqim"]')?.click();
+  new bootstrap.Modal(outModal).show();
+  {% endif %}
+</script>
+{% endblock %}

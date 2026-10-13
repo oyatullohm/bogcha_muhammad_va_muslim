@@ -1,0 +1,128 @@
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
+import os
+import environ
+env = environ.Env()
+environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
+SECRET_KEY = str(env('SECRET_KEY'))
+DEBUG = bool(env('DEBUG'))
+BOT_TOKEN = str(env('BOT_TOKEN'))
+BOT_PASSWORD = str(env('BOT_PASSWORD'))
+SITE_URL = str(env('SITE_URL'))
+ALLOWED_HOSTS = ['*']
+
+INSTALLED_APPS = [
+    'django.contrib.admin',
+    'django.contrib.auth',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.staticfiles',
+    'main.apps.MainConfig',
+    'bot.apps.BotConfig',
+    
+]
+
+MIDDLEWARE = [
+    'django.middleware.security.SecurityMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+ROOT_URLCONF = 'Admin.urls'
+
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],
+        'APP_DIRS': True,
+        'OPTIONS': {
+            'context_processors': [
+                'django.template.context_processors.request',
+                'django.contrib.auth.context_processors.auth',
+                'django.contrib.messages.context_processors.messages',
+                'main.context_processors.nav_counts',
+            ],
+        },
+    },
+]
+
+WSGI_APPLICATION = 'Admin.wsgi.application'
+CACHES = {'default': {
+    'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+    'LOCATION': BASE_DIR / 'cache',
+}}
+SESSION_ENGINE = 'django.contrib.sessions.backends.cached_db'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+
+# Internationalization
+# https://docs.djangoproject.com/en/5.2/topics/i18n/
+
+LANGUAGE_CODE = 'en-us'
+
+TIME_ZONE = 'Asia/Tashkent'
+
+USE_I18N = True
+
+USE_TZ = True
+
+
+# Static files (CSS, JavaScript, Images)
+# https://docs.djangoproject.com/en/5.2/howto/static-files/
+
+STATIC_URL = 'static/'
+
+# Default primary key field type
+# https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'main.User'
+
+handler404 = 'main.home_views.custom_404'
+handler500 = 'main.home_views.custom_500'
+handler403 = 'main.home_views.custom_403'
+handler400 = 'main.home_views.custom_400'
+
+# LOGGING = {
+#     'version':1,
+#     'handlers':{
+#          'file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.FileHandler',
+#             'filename': 'debug.log'
+#         },
+#         'console':{'class':'logging.StreamHandler'}
+#     },
+#     'loggers':{
+#         'django.db.backends':{
+#             'handlers':['file'],
+#             'level':'DEBUG'
+#                     }
+#                }
+# }  

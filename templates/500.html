@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 - Server xatosi</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0f172a;
+            padding: 2rem 1rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            width: 600px;
+            height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(239, 68, 68, 0.2) 0%, transparent 70%);
+            top: -200px;
+            right: -200px;
+            animation: float 15s ease-in-out infinite;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(220, 38, 38, 0.15) 0%, transparent 70%);
+            bottom: -200px;
+            left: -200px;
+            animation: float 20s ease-in-out infinite reverse;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(40px, -40px); }
+        }
+
+        .grid-bg {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(148, 163, 184, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(148, 163, 184, 0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+        }
+
+        .error-container {
+            position: relative;
+            z-index: 1;
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 1.2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            color: #cbd5e1;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .brand i {
+            color: #ef4444;
+            font-size: 1.25rem;
+        }
+
+        .error-code-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 1rem;
+        }
+
+        .error-code {
+            font-size: clamp(7rem, 20vw, 13rem);
+            font-weight: 900;
+            line-height: 0.9;
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 50%, #b91c1c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: -0.05em;
+            animation: glow 3s ease-in-out infinite;
+            position: relative;
+            z-index: 2;
+        }
+
+        @keyframes glow {
+            0%, 100% { filter: drop-shadow(0 0 30px rgba(239, 68, 68, 0.4)); }
+            50% { filter: drop-shadow(0 0 60px rgba(239, 68, 68, 0.7)); }
+        }
+
+        .error-icon-bg {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 15rem;
+            color: rgba(239, 68, 68, 0.08);
+            z-index: 1;
+            animation: shake 3s ease-in-out infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+            25% { transform: translate(-52%, -50%) rotate(-3deg); }
+            75% { transform: translate(-48%, -50%) rotate(3deg); }
+        }
+
+        .error-title {
+            font-size: clamp(1.5rem, 4vw, 2.25rem);
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .error-title span {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .error-message {
+            font-size: clamp(0.95rem, 2vw, 1.1rem);
+            color: #94a3b8;
+            line-height: 1.7;
+            margin-bottom: 2.5rem;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .btn-group-error {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-glow {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.9rem 1.8rem;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary-glow {
+            background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            color: #fff;
+            box-shadow: 0 10px 30px -10px rgba(239, 68, 68, 0.6);
+        }
+
+        .btn-primary-glow:hover {
+            color: #fff;
+            transform: translateY(-3px);
+            box-shadow: 0 15px 40px -10px rgba(239, 68, 68, 0.8);
+        }
+
+        .btn-secondary-glow {
+            background: rgba(255, 255, 255, 0.05);
+            color: #cbd5e1;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-secondary-glow:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            transform: translateY(-3px);
+        }
+
+        .error-footer {
+            margin-top: 3rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.85rem;
+            color: #64748b;
+        }
+
+        .error-footer a {
+            color: #ef4444;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .error-footer a:hover {
+            text-decoration: underline;
+        }
+
+        .error-info-box {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.25rem;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            border-radius: 10px;
+            color: #fca5a5;
+            font-size: 0.85rem;
+            margin-bottom: 2rem;
+        }
+
+        @media (max-width: 575.98px) {
+            .btn-glow {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-bg"></div>
+
+    <div class="error-container">
+        <div class="brand">
+            <i class="bi bi-house-heart-fill"></i>
+            <span>Bog'cha boshqaruv tizimi</span>
+        </div>
+
+        <div class="error-code-wrapper">
+            <i class="bi bi-exclamation-triangle-fill error-icon-bg"></i>
+            <div class="error-code">500</div>
+        </div>
+
+        <h1 class="error-title">
+            Serverda <span>xatolik</span>
+        </h1>
+
+        <div class="error-info-box">
+            <i class="bi bi-shield-exclamation"></i>
+            Xato avtomatik ravishda administratorga yuborildi
+        </div>
+
+        <p class="error-message">
+            Kechirasiz, serverda kutilmagan xatolik yuz berdi.
+            Iltimos, bir necha daqiqadan so'ng qayta urinib ko'ring.
+        </p>
+
+        <div class="btn-group-error">
+            <a href="/" class="btn-glow btn-primary-glow">
+                <i class="bi bi-arrow-clockwise"></i>
+                Qayta urinish
+            </a>
+            <a href="javascript:history.back()" class="btn-glow btn-secondary-glow">
+                <i class="bi bi-arrow-left"></i>
+                Orqaga
+            </a>
+        </div>
+
+        <div class="error-footer">
+            <i class="bi bi-info-circle me-1"></i>
+            Muammo davom etsa,
+            <a href="mailto:admin@bogcha.uz">administratorga</a> murojaat qiling
+        </div>
+    </div>
+</body>
+</html>

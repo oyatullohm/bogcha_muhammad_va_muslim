@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% load l10n %}
+{% block title %}Tarbiyachilar{% endblock %}
+{% block page_title %}Tarbiyachilar va davomat{% endblock %}
+
+{% block content %}
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#davomat"><i class="bi bi-clock-history me-1"></i>Davomat</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tarbiyachilar"><i class="bi bi-person-badge me-1"></i>Tarbiyachilar</button></li>
+  {% if user.is_admin %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lokatsiya"><i class="bi bi-geo-alt me-1"></i>Bog'cha lokatsiyasi</button></li>{% endif %}
+</ul>
+
+<div class="tab-content">
+
+  <!-- ================= DAVOMAT ================= -->
+  <div class="tab-pane fade show active" id="davomat">
+    <div class="card"><div class="card-body">
+      <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-3">
+        <div class="d-flex align-items-center gap-2">
+          <a class="btn btn-outline-secondary" href="?date={{ prev_day|date:'Y-m-d' }}#davomat"><i class="bi bi-chevron-left"></i></a>
+          <form method="get" class="d-flex"><input type="date" name="date" value="{{ day|date:'Y-m-d' }}" class="form-control" onchange="this.form.submit()"></form>
+          <a class="btn btn-outline-secondary" href="?date={{ next_day|date:'Y-m-d' }}#davomat"><i class="bi bi-chevron-right"></i></a>
+        </div>
+        <span class="badge bg-success fs-6">Kelgan: {{ present_count }} / {{ rows|length }}</span>
+      </div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>Tarbiyachi</th><th>Keldi</th><th>Ketdi</th><th>Ishlagan</th><th>Holat</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr>
+            <td class="fw-semibold">{{ r.teacher.full_name }}</td>
+            <td>{{ r.att.check_in|time:"H:i"|default:"—" }}</td>
+            <td>{{ r.att.check_out|time:"H:i"|default:"—" }}</td>
+            <td>{% if r.att.worked_hours %}{{ r.att.worked_hours }} soat{% else %}—{% endif %}</td>
+            <td>
+              {% if not r.att or not r.att.check_in %}<span class="badge bg-danger">Kelmagan</span>
+              {% elif r.att.is_late %}<span class="badge bg-warning text-dark">Kechikdi</span>
+              {% else %}<span class="badge bg-success">Vaqtida</span>{% endif %}
+            </td>
+            {% if user.is_admin %}
+            <td class="text-end"><button class="btn btn-sm btn-outline-primary" title="Qo'lda belgilash/tahrirlash"
+              data-bs-toggle="modal" data-bs-target="#attModal" data-edit="#attModal"
+              data-action="{% url 'attendance_save' %}" data-teacher="{{ r.teacher.pk }}" data-date="{{ day|date:'Y-m-d' }}"
+              data-check_in="{{ r.att.check_in|date:'Y-m-d\TH:i' }}" data-check_out="{{ r.att.check_out|date:'Y-m-d\TH:i' }}"
+              data-is_late="{{ r.att.is_late|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button></td>
+            {% endif %}
+          </tr>
+        {% empty %}<tr><td colspan="6" class="text-center text-muted py-4">Faol tarbiyachi yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+
+  <!-- ================= TARBIYACHILAR ================= -->
+  <div class="tab-pane fade" id="tarbiyachilar">
+    {% if user.is_admin and bot_pending %}
+    <div class="card mb-3 border-warning"><div class="card-body">
+      <h5 class="mb-1"><i class="bi bi-telegram text-primary me-2"></i>Botga kirganlar — ulash kutilmoqda <span class="badge bg-warning text-dark">{{ bot_pending|length }}</span></h5>
+      <p class="text-muted small">Bular botga parol bilan kirgan. Kimligini tanlang va «Bog'lash» ni bosing — Telegram ID o'zi yoziladi.</p>
+      <div class="table-responsive"><table class="table align-middle mb-0">
+        <thead class="table-light"><tr><th>Telegram</th><th>ID</th><th>Kirgan vaqti</th><th>Kimligi</th><th></th></tr></thead>
+        <tbody>
+        {% for b in bot_pending %}
+          <tr>
+            <td class="fw-semibold">{{ b.display_name }}{% if b.username %} <span class="text-muted small">@{{ b.username }}</span>{% endif %}</td>
+            <td><code>{{ b.telegram_id }}</code></td><td class="small text-muted">{{ b.verified_at|date:"d.m.Y H:i" }}</td>
+            <td style="min-width:240px">
+              <form method="post" action="{% url 'bot_user_link' b.pk %}" class="d-flex gap-2">
+                {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <select name="target" class="form-select form-select-sm" required>
+                  <option value="">— kimligini tanlang —</option>
+                  <optgroup label="Tarbiyachilar">{% for t in bot_teachers %}<option value="t:{{ t.pk }}">{{ t.full_name }}</option>{% endfor %}</optgroup>
+                  <optgroup label="Xodimlar (admin / yordamchi)">{% for u in bot_users %}<option value="u:{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>{% endfor %}</optgroup>
+                </select>
+                <button class="btn btn-sm btn-success text-nowrap"><i class="bi bi-link-45deg"></i> Bog'lash</button>
+              </form>
+            </td>
+            <td class="text-end">{% url 'bot_user_delete' b.pk as bd %}{% include '_post_btn.html' with url=bd icon='x-lg' confirm="Ro'yxatdan olib tashlansinmi?" title="Olib tashlash" %}</td>
+          </tr>
+        {% endfor %}
+        </tbody></table></div>
+    </div></div>
+    {% endif %}
+    {% if selected %}
+    <div class="card mb-3 border-primary"><div class="card-body">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h5 class="mb-0">{{ selected.teacher.full_name }} — {{ selected.month|date:"F Y" }}</h5>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="?id={{ selected.teacher.pk }}&month={{ selected.prev|date:'Y-m' }}#tarbiyachilar"><i class="bi bi-chevron-left"></i></a>
+          <a class="btn btn-sm btn-outline-secondary" href="?id={{ selected.teacher.pk }}&month={{ selected.next|date:'Y-m' }}#tarbiyachilar"><i class="bi bi-chevron-right"></i></a>
+          <a class="btn btn-sm btn-light" href="{% url 'teacher_list' %}#tarbiyachilar"><i class="bi bi-x-lg"></i></a>
+        </div>
+      </div>
+      <div class="row g-3 mb-3 text-center">
+        <div class="col-4"><div class="border rounded p-2"><div class="small text-muted">Ishlagan kun</div><div class="fs-4 fw-bold">{{ selected.days }}</div></div></div>
+        <div class="col-4"><div class="border rounded p-2"><div class="small text-muted">Kechikish</div><div class="fs-4 fw-bold text-warning">{{ selected.late }}</div></div></div>
+        <div class="col-4"><div class="border rounded p-2"><div class="small text-muted">Jami soat</div><div class="fs-4 fw-bold text-primary">{{ selected.hours }}</div></div></div>
+      </div>
+      <div class="table-responsive"><table class="table table-bordered text-center mb-2" style="table-layout:fixed;min-width:560px">
+        <thead class="table-light"><tr><th>Du</th><th>Se</th><th>Ch</th><th>Pa</th><th>Ju</th><th>Sh</th><th>Ya</th></tr></thead>
+        <tbody>
+        {% for week in selected.weeks %}<tr>
+          {% for d in week %}
+          <td class="p-1 {% if not d.in_month %}bg-light text-muted opacity-50{% elif d.status == 'ok' %}table-success{% elif d.status == 'late' %}table-warning{% elif d.status == 'absent' %}table-danger{% elif d.weekend %}bg-light{% endif %}" style="height:86px;vertical-align:top">
+            <div class="small fw-semibold text-start">{{ d.date.day }}</div>
+            {% if d.in_month and d.data and d.data.check_in %}
+              <div class="small"><i class="bi bi-box-arrow-in-right text-success"></i> {{ d.data.check_in|time:"H:i" }}</div>
+              {% if d.data.check_out %}<div class="small"><i class="bi bi-box-arrow-right text-secondary"></i> {{ d.data.check_out|time:"H:i" }}</div>{% endif %}
+            {% elif d.status == 'absent' %}<div class="small text-danger">kelmagan</div>{% endif %}
+          </td>{% endfor %}
+        </tr>{% endfor %}
+        </tbody></table></div>
+      <div class="d-flex flex-wrap gap-3 small">
+        <span><span class="badge bg-success">&nbsp;</span> vaqtida</span>
+        <span><span class="badge bg-warning">&nbsp;</span> kechikkan</span>
+        <span><span class="badge bg-danger">&nbsp;</span> kelmagan (ish kuni)</span>
+      </div>
+    </div></div>
+    {% endif %}
+
+    <div class="card"><div class="card-body">
+      <div class="d-flex flex-wrap gap-2 justify-content-between mb-3">
+        <form method="get" class="d-flex gap-2">
+          <input type="search" name="q" value="{{ q }}" class="form-control" placeholder="Ism yoki telefon...">
+          <button class="btn btn-outline-secondary"><i class="bi bi-search"></i></button>
+        </form>
+        {% if user.is_admin %}<button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal"><i class="bi bi-plus-lg me-1"></i>Yangi tarbiyachi</button>{% endif %}
+      </div>
+      <div class="table-responsive"><table class="table table-hover">
+        <thead class="table-light"><tr><th>F.I.Sh</th><th>Telefon</th><th>Tug'ilgan sana</th><th>Telegram</th>{% if user.is_admin %}<th>Maosh</th>{% endif %}<th>Holat</th><th class="text-end">Amallar</th></tr></thead>
+        <tbody>
+        {% for t in teachers %}
+          <tr class="{% if not t.is_active %}table-secondary{% endif %}">
+            <td class="fw-semibold">{{ t.full_name }}</td><td>{{ t.phone }}</td><td>{{ t.birth_date|date:"d.m.Y" }}</td>
+            <td>{% if t.telegram_id %}<span class="badge bg-success"><i class="bi bi-telegram"></i> bog'langan</span>{% else %}<span class="badge bg-light text-muted border">yo'q</span>{% endif %}</td>
+            {% if user.is_admin %}<td>{{ t.salary|floatformat:"0g" }}</td>{% endif %}
+            <td>{% if t.is_active %}<span class="badge bg-success">Faol</span>{% else %}<span class="badge bg-secondary">Arxiv</span>{% endif %}</td>
+            <td class="text-end text-nowrap">
+              <a class="btn btn-sm btn-outline-info" title="Oylik hisobot" href="?id={{ t.pk }}#tarbiyachilar"><i class="bi bi-graph-up"></i></a>
+              {% if user.is_admin %}
+              <button class="btn btn-sm btn-outline-primary" title="Tahrirlash" data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+                data-action="{% url 'teacher_update' t.pk %}" data-full_name="{{ t.full_name }}" data-phone="{{ t.phone }}"
+                data-telegram_id="{{ t.telegram_id|default_if_none:''|unlocalize }}" data-birth_date="{{ t.birth_date|date:'Y-m-d' }}"
+                data-salary="{{ t.salary|unlocalize }}" data-is_active="{{ t.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+              {% url 'teacher_toggle' t.pk as tg %}
+              {% if t.is_active %}{% include '_post_btn.html' with url=tg icon='archive' cls='btn-outline-secondary' confirm="Arxivga olinsinmi?" title="Arxivga" %}
+              {% else %}{% include '_post_btn.html' with url=tg icon='arrow-counterclockwise' cls='btn-outline-success' title="Faollashtirish" %}{% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="7" class="text-center text-muted py-4">Tarbiyachi topilmadi</td></tr>{% endfor %}
+        </tbody></table></div>
+    </div></div>
+  </div>
+
+  <!-- ================= LOKATSIYA ================= -->
+  {% if user.is_admin %}
+  <div class="tab-pane fade" id="lokatsiya">
+    <div class="card"><div class="card-body" style="max-width:720px">
+      <p class="text-muted">Tarbiyachi botga location yuborganda, u shu nuqtadan <b>radius</b> ichida bo'lsa "keldi" deb hisoblanadi. Koordinatani Google Maps'da bog'cha ustiga o'ng tugma bosib nusxalang.</p>
+      <form method="post" action="{% url 'kindergarten_save' %}">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div class="row g-3">{% for field in kg_form %}{% include '_field.html' %}{% endfor %}</div>
+        <button class="btn btn-primary mt-3"><i class="bi bi-check2-circle me-1"></i>Saqlash</button>
+      </form>
+    </div></div>
+  </div>
+  {% endif %}
+</div>
+
+{% if user.is_admin %}
+{% url 'teacher_create' as create_url %}
+{% include '_form_modal.html' with modal_id='createModal' title="Yangi tarbiyachi" form=form action=create_url icon='person-plus' %}
+{% include '_form_modal.html' with modal_id='editModal' title="Tarbiyachini tahrirlash" form=edit_form action='' %}
+{% url 'attendance_save' as att_url %}
+{% include '_form_modal.html' with modal_id='attModal' title="Davomatni belgilash / tahrirlash" form=att_form action=att_url icon='clock-history' %}
+{% endif %}
+{% endblock %}

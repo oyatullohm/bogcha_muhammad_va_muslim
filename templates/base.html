@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Bog'cha boshqaruv tizimi{% endblock %}</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+
+    <style>
+        :root {
+            --sidebar-width: 260px;
+            --sidebar-bg: #1e293b;
+            --sidebar-hover: #334155;
+            --sidebar-active: #3b82f6;
+            --navbar-height: 60px;
+        }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f1f5f9; min-height: 100vh; }
+
+        /* SIDEBAR */
+        .sidebar { position: fixed; top: 0; left: 0; width: var(--sidebar-width); height: 100vh;
+            background: var(--sidebar-bg); color: #cbd5e1; transition: transform .3s ease;
+            z-index: 1040; overflow-y: auto; display: flex; flex-direction: column; }
+        .sidebar-brand { padding: 1.25rem 1.5rem; font-size: 1.25rem; font-weight: 700; color: #fff;
+            border-bottom: 1px solid rgba(255,255,255,.08); display: flex; align-items: center;
+            gap: .75rem; text-decoration: none; }
+        .sidebar-brand:hover { color: #fff; }
+        .sidebar-brand i { font-size: 1.75rem; color: var(--sidebar-active); }
+        .sidebar-menu { flex: 1; padding: 1rem 0; list-style: none; margin: 0; }
+        .sidebar-menu .menu-header { padding: .75rem 1.5rem .35rem; font-size: .7rem; text-transform: uppercase;
+            letter-spacing: .08em; color: #64748b; font-weight: 600; }
+        .sidebar-menu a { display: flex; align-items: center; gap: .75rem; padding: .65rem 1.5rem; color: #cbd5e1;
+            text-decoration: none; font-size: .95rem; border-left: 3px solid transparent; transition: all .2s ease; }
+        .sidebar-menu a:hover { background: var(--sidebar-hover); color: #fff; }
+        .sidebar-menu a.active { background: rgba(59,130,246,.15); color: #fff;
+            border-left-color: var(--sidebar-active); font-weight: 600; }
+        .sidebar-menu a i { font-size: 1.15rem; width: 22px; text-align: center; }
+        .sidebar-menu .badge { margin-left: auto; font-size: .7rem; }
+        .sidebar-footer { padding: 1rem 1.5rem; border-top: 1px solid rgba(255,255,255,.08);
+            font-size: .75rem; color: #64748b; }
+
+        /* MAIN */
+        .main-wrapper { margin-left: var(--sidebar-width); min-height: 100vh; display: flex; flex-direction: column; }
+        .topbar { height: var(--navbar-height); background: #fff; border-bottom: 1px solid #e2e8f0; display: flex;
+            align-items: center; padding: 0 1.5rem; position: sticky; top: 0; z-index: 1020; gap: 1rem; }
+        .topbar .btn-toggle { display: none; background: transparent; border: none; font-size: 1.5rem;
+            color: #334155; padding: 0; }
+        .topbar .page-title { font-size: 1.1rem; font-weight: 600; color: #1e293b; margin: 0; }
+        .topbar .user-info { margin-left: auto; display: flex; align-items: center; gap: .75rem; }
+        .topbar .user-avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #e2e8f0; }
+        .content { padding: 1.5rem; flex: 1; }
+
+        .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 1030; }
+        .sidebar-overlay.show { display: block; }
+
+        @media (max-width: 991.98px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.show { transform: translateX(0); }
+            .main-wrapper { margin-left: 0; }
+            .topbar .btn-toggle { display: block; }
+        }
+        .sidebar::-webkit-scrollbar { width: 6px; }
+        .sidebar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+        /* Umumiy */
+        .card { border: 0; box-shadow: 0 1px 3px rgba(0,0,0,.08); border-radius: .75rem; }
+        .stat-card .icon { width: 48px; height: 48px; border-radius: .75rem; display: flex;
+            align-items: center; justify-content: center; font-size: 1.4rem; }
+        .table > :not(caption) > * > * { vertical-align: middle; }
+        .nav-tabs .nav-link { color: #475569; }
+        .nav-tabs .nav-link.active { font-weight: 600; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- ============ SIDEBAR ============ -->
+    <aside class="sidebar" id="sidebar">
+        <a href="{% url 'dashboard' %}" class="sidebar-brand">
+            <i class="bi bi-house-heart-fill"></i>
+            <span>Bog'cha boshqaruv</span>
+        </a>
+
+        {% with n=request.resolver_match.url_name %}
+        <ul class="sidebar-menu">
+            <li class="menu-header">Asosiy</li>
+            <li><a href="{% url 'dashboard' %}" class="{% if n == 'dashboard' %}active{% endif %}">
+                <i class="bi bi-speedometer2"></i><span>Dashboard</span></a></li>
+
+            <li class="menu-header">Bolalar</li>
+            <li><a href="{% url 'child_list' %}" class="{% if n == 'child_list' %}active{% endif %}">
+                <i class="bi bi-people-fill"></i><span>Bolalar</span>
+                <span class="badge bg-primary rounded-pill">{{ children_count|default:0 }}</span></a></li>
+            <li><a href="{% url 'group_list' %}" class="{% if n == 'group_list' %}active{% endif %}">
+                <i class="bi bi-collection-fill"></i><span>Guruhlar</span></a></li>
+            <li><a href="{% url 'teacher_list' %}" class="{% if n == 'teacher_list' %}active{% endif %}">
+                <i class="bi bi-person-badge-fill"></i><span>Tarbiyachilar</span></a></li>
+
+            <li class="menu-header">Moliya</li>
+            <li><a href="{% url 'payment_list' %}" class="{% if n == 'payment_list' %}active{% endif %}">
+                <i class="bi bi-cash-coin"></i><span>To'lovlar</span>
+                {% if debtors_count %}<span class="badge bg-danger rounded-pill" title="Qarzdorlar">{{ debtors_count }}</span>{% endif %}</a></li>
+            <li><a href="{% url 'tariff_list' %}" class="{% if n == 'tariff_list' %}active{% endif %}">
+                <i class="bi bi-receipt"></i><span>Tariflar</span></a></li>
+            {% if user.is_admin %}
+            <li><a href="{% url 'expense_list' %}" class="{% if n == 'expense_list' %}active{% endif %}">
+                <i class="bi bi-graph-down-arrow"></i><span>Chiqimlar</span></a></li>
+            <li><a href="{% url 'expense_list' %}?period=1m#statistika">
+                <i class="bi bi-bar-chart-line-fill"></i><span>Statistika</span></a></li>
+            {% endif %}
+
+            <li class="menu-header">Oshxona</li>
+            <li><a href="{% url 'product_list' %}" class="{% if n == 'product_list' %}active{% endif %}">
+                <i class="bi bi-basket-fill"></i><span>Mahsulotlar</span>
+                {% if low_stock_count %}<span class="badge bg-danger rounded-pill">{{ low_stock_count }}</span>{% endif %}</a></li>
+            <li><a href="{% url 'meal_list' %}" class="{% if n == 'meal_list' %}active{% endif %}">
+                <i class="bi bi-egg-fried"></i><span>Taomlar va menyu</span></a></li>
+
+            <li class="menu-header">Sozlamalar</li>
+            <li><a href="{% url 'notification_list' %}" class="{% if n == 'notification_list' %}active{% endif %}">
+                <i class="bi bi-bell-fill"></i><span>Bildirishnomalar</span></a></li>
+            {% if user.is_admin %}
+            <li><a href="{% url 'user_list' %}" class="{% if n == 'user_list' %}active{% endif %}">
+                <i class="bi bi-person-gear"></i><span>Foydalanuvchilar</span></a></li>
+            <li><a href="/admin/"><i class="bi bi-gear-fill"></i><span>Admin panel</span></a></li>
+            {% endif %}
+        </ul>
+        {% endwith %}
+
+        <div class="sidebar-footer"><div>v1.0.0 &copy; {% now "Y" %}</div></div>
+    </aside>
+
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+    <!-- ============ MAIN ============ -->
+    <div class="main-wrapper">
+        <header class="topbar">
+            <button class="btn-toggle" id="btnToggle"><i class="bi bi-list"></i></button>
+            <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+
+            <div class="user-info">
+                <!-- Qo'ng'iroqcha -->
+                <div class="dropdown">
+                    <button class="btn btn-light position-relative" data-bs-toggle="dropdown">
+                        <i class="bi bi-bell"></i>
+                        {% if bell_count %}
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ bell_count }}</span>
+                        {% endif %}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 300px;">
+                        <li><h6 class="dropdown-header">Bildirishnomalar</h6></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% if low_stock_count %}
+                        <li><a class="dropdown-item" href="{% url 'product_list' %}?low=1">
+                            <i class="bi bi-exclamation-triangle text-danger me-2"></i>{{ low_stock_count }} ta mahsulot tugayapti</a></li>
+                        {% endif %}
+                        {% if birthdays_today %}
+                        <li><a class="dropdown-item" href="{% url 'dashboard' %}">
+                            <i class="bi bi-cake2 text-warning me-2"></i>Bugun {{ birthdays_today }} ta tug'ilgan kun</a></li>
+                        {% endif %}
+                        {% if debtors_count %}
+                        <li><a class="dropdown-item" href="{% url 'payment_list' %}#qarzdorlar">
+                            <i class="bi bi-cash-stack text-danger me-2"></i>{{ debtors_count }} ta qarzdor</a></li>
+                        {% endif %}
+                        {% if not bell_count %}
+                        <li><span class="dropdown-item text-muted">Yangi bildirishnoma yo'q</span></li>
+                        {% endif %}
+                    </ul>
+                </div>
+
+                <!-- Foydalanuvchi -->
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-decoration-none dropdown-toggle" data-bs-toggle="dropdown">
+                        <div class="user-avatar bg-primary text-white d-flex align-items-center justify-content-center">
+                            {{ user.username|first|upper }}
+                        </div>
+                        <span class="ms-2 d-none d-md-inline text-dark">{{ user.get_full_name|default:user.username }}</span>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item" href="{% url 'notification_list' %}">
+                            <i class="bi bi-bell me-2"></i>Bildirishnoma sozlamalari</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li>
+                            <form method="post" action="{% url 'logout' %}">{% csrf_token %}
+                                <button class="dropdown-item text-danger"><i class="bi bi-box-arrow-right me-2"></i>Chiqish</button>
+                            </form>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </header>
+
+        <main class="content">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // ---- Sidebar (mobil)
+        const sidebar = document.getElementById('sidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        document.getElementById('btnToggle')?.addEventListener('click', () => {
+            sidebar.classList.toggle('show'); overlay.classList.toggle('show');
+        });
+        overlay?.addEventListener('click', () => {
+            sidebar.classList.remove('show'); overlay.classList.remove('show');
+        });
+
+        // ---- TAHRIRLASH MODALI: tugmadagi data-* qiymatlari forma maydonlariga (name bo'yicha) yoziladi
+        //   <button data-bs-toggle="modal" data-bs-target="#editModal" data-edit="#editModal"
+        //           data-action="/groups/3/edit/" data-name="Guruh" data-teacher="2">
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-edit]');
+            if (!btn) return;
+            const form = document.querySelector(btn.dataset.edit)?.querySelector('form');
+            if (!form) return;
+            form.reset();
+            if (btn.dataset.action) form.action = btn.dataset.action;
+            const skip = ['edit', 'action', 'bsToggle', 'bsTarget'];
+            for (const [key, val] of Object.entries(btn.dataset)) {
+                if (skip.includes(key)) continue;
+                const el = form.elements[key];
+                if (!el) continue;
+                if (el.type === 'checkbox') el.checked = (val === '1');
+                else if (el.type === 'select-multiple')
+                    [...el.options].forEach(o => o.selected = val.split(',').includes(o.value));
+                else if (el.type !== 'file') el.value = val;
+            }
+        });
+
+        // ---- Tablar: #hash bo'yicha ochiladi va eslab qolinadi
+        const hash = location.hash;
+        if (hash) {
+            const t = document.querySelector(`[data-bs-toggle="tab"][data-bs-target="${hash}"]`);
+            if (t) bootstrap.Tab.getOrCreateInstance(t).show();
+        }
+        document.querySelectorAll('[data-bs-toggle="tab"]').forEach(t =>
+            t.addEventListener('shown.bs.tab', e => history.replaceState(null, '', e.target.dataset.bsTarget)));
+
+        // ---- Forma yuborilganda shu tabga qaytish uchun hash'ni next ga qo'shamiz
+        document.addEventListener('submit', (e) => {
+            const n = e.target.querySelector('input[name=next]');
+            if (n && location.hash) n.value = n.value.split('#')[0] + location.hash;
+        });
+    </script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
