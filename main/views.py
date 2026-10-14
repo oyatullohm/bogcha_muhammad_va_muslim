@@ -340,7 +340,7 @@ def teacher_list(request):
         'form': form, 'edit_form': edit_form, 'att_form': att_form,
     }
     if request.user.is_admin:
-        ctx['kg_form'] = KindergartenForm(instance=Kindergarten.objects.first())
+        # ctx['kg_form'] = KindergartenForm(instance=Kindergarten.objects.first())
         # botga parol bilan kirgan, lekin hali tarbiyachi/xodimga ulanmaganlar
         pending = list(BotUser.objects.filter(verified=True)
                        .exclude(telegram_id__in=Teacher.objects.filter(telegram_id__isnull=False).values('telegram_id'))
