@@ -7,7 +7,8 @@
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#davomat"><i class="bi bi-clock-history me-1"></i>Davomat</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tarbiyachilar"><i class="bi bi-person-badge me-1"></i>Tarbiyachilar</button></li>
-  <!-- {% if user.is_admin %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lokatsiya"><i class="bi bi-geo-alt me-1"></i>Bog'cha lokatsiyasi</button></li>{% endif %} -->
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ishkunlari"><i class="bi bi-calendar-x me-1"></i>Ish kunlari</button></li>
+  {% if user.is_admin %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lokatsiya"><i class="bi bi-geo-alt me-1"></i>Bog'cha lokatsiyasi</button></li>{% endif %}
 </ul>
 
 <div class="tab-content">
@@ -24,18 +25,147 @@
         <span class="badge bg-success fs-6">Kelgan: {{ present_count }} / {{ rows|length }}</span>
       </div>
       <div class="table-responsive"><table class="table table-hover">
-        <thead class="table-light"><tr><th>Tarbiyachi</th><th>Keldi</th><th>Ketdi</th><th>Ishlagan</th><th>Holat</th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
+        <thead class="table-light"><tr><th>Tarbiyachi</th><th>Keldi</th><th>Ketdi</th><th>Ishlagan</th><th>Holat</th><th></th>{% if user.is_admin %}<th></th>{% endif %}</tr></thead>
         <tbody>
         {% for r in rows %}
           <tr>
             <td class="fw-semibold">{{ r.teacher.full_name }}</td>
             <td>{{ r.att.check_in|time:"H:i"|default:"—" }}</td>
-            <td>{{ r.att.check_out|time:"H:i"|default:"—" }}</td>
+            <td>{{ r.att.check_out|time:"H:i"|default:"—" }}{% if r.att.auto_checkout %} <span class="badge bg-secondary" title="Ketdim bosilmagan - avtomatik qo'yilgan">avto</span>{% endif %}</td>
             <td>{% if r.att.worked_hours %}{{ r.att.worked_hours }} soat{% else %}—{% endif %}</td>
             <td>
               {% if not r.att or not r.att.check_in %}<span class="badge bg-danger">Kelmagan</span>
               {% elif r.att.is_late %}<span class="badge bg-warning text-dark">Kechikdi</span>
               {% else %}<span class="badge bg-success">Vaqtida</span>{% endif %}
+            </td>
+            <td class="text-end">
+              <div class="dropdown">
+                <button type="button"
+                          class="btn btn-sm btn-outline-success"
+                          data-bs-toggle="modal"
+                          data-bs-target="#sendLinkModal{{ r.teacher.pk }}">
+                      <i class="bi bi-send me-1"></i>
+                      Yuborish
+                  </button>
+                  <div class="modal fade"
+     id="sendLinkModal{{ r.teacher.pk }}"
+     tabindex="-1"
+     aria-labelledby="sendLinkModalLabel{{ r.teacher.pk }}"
+     aria-hidden="true">
+
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title"
+                    id="sendLinkModalLabel{{ r.teacher.pk }}">
+                    <i class="bi bi-send me-2"></i>
+                    Havola yuborish
+                </h5>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Yopish">
+                </button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="text-center mb-4">
+                    <div class="mb-2">
+                        <i class="bi bi-person-circle"
+                           style="font-size: 48px;"></i>
+                    </div>
+
+                    <h5 class="mb-1">
+                        {{ r.teacher.full_name }}
+                    </h5>
+
+                    <small class="text-muted">
+                        Qaysi havolani yubormoqchisiz?
+                    </small>
+                </div>
+
+                <div class="d-grid gap-2">
+
+                    <!-- Keldim yuborish -->
+                    <form method="post"
+                          action="{% url 'teacher_send_link' r.teacher.pk %}">
+                        {% csrf_token %}
+
+                        <input type="hidden"
+                               name="next"
+                               value="{{ request.get_full_path }}">
+
+                        <input type="hidden"
+                               name="kind"
+                               value="in">
+
+                        <input type="hidden"
+                               name="mode"
+                               value="send">
+
+                        <button type="submit"
+                                class="btn btn-success w-100">
+                            <i class="bi bi-geo-alt me-2"></i>
+                            Keldim yuborish
+                        </button>
+                    </form>
+
+
+                    <!-- Ketdim yuborish -->
+                    <form method="post"
+                          action="{% url 'teacher_send_link' r.teacher.pk %}">
+                        {% csrf_token %}
+
+                        <input type="hidden"
+                               name="next"
+                               value="{{ request.get_full_path }}">
+
+                        <input type="hidden"
+                               name="kind"
+                               value="out">
+
+                        <input type="hidden"
+                               name="mode"
+                               value="send">
+
+                        <button type="submit"
+                                class="btn btn-warning w-100">
+                            <i class="bi bi-house-door me-2"></i>
+                            Ketdim yuborish
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                    Yopish
+                </button>
+            </div>
+
+        </div>
+    </div>
+</div>
+                <ul class="dropdown-menu dropdown-menu-end">
+                  <li><h6 class="dropdown-header">{{ r.teacher.full_name }}</h6></li>
+                  {% for kind, mode, icon, text in link_actions %}
+                  <li>
+                    <form method="post" action="{% url 'teacher_send_link' r.teacher.pk %}">
+                      {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="mode" value="{{ mode }}">
+                      <button class="dropdown-item"><i class="bi bi-{{ icon }} me-2"></i>{{ text }}</button>
+                    </form>
+                  </li>
+                  {% endfor %}
+                </ul>
+              </div>
             </td>
             {% if user.is_admin %}
             <td class="text-end"><button class="btn btn-sm btn-outline-primary" title="Qo'lda belgilash/tahrirlash"
@@ -49,6 +179,7 @@
         </tbody></table></div>
     </div></div>
   </div>
+  
 
   <!-- ================= TARBIYACHILAR ================= -->
   <div class="tab-pane fade" id="tarbiyachilar">
@@ -100,12 +231,12 @@
         <tbody>
         {% for week in selected.weeks %}<tr>
           {% for d in week %}
-          <td class="p-1 {% if not d.in_month %}bg-light text-muted opacity-50{% elif d.status == 'ok' %}table-success{% elif d.status == 'late' %}table-warning{% elif d.status == 'absent' %}table-danger{% elif d.weekend %}bg-light{% endif %}" style="height:86px;vertical-align:top">
+          <td class="p-1 {% if not d.in_month %}bg-light text-muted opacity-50{% elif d.status == 'ok' %}table-success{% elif d.status == 'late' %}table-warning{% elif d.status == 'absent' %}table-danger{% elif d.off %}bg-light{% endif %}" style="height:86px;vertical-align:top">
             <div class="small fw-semibold text-start">{{ d.date.day }}</div>
             {% if d.in_month and d.data and d.data.check_in %}
               <div class="small"><i class="bi bi-box-arrow-in-right text-success"></i> {{ d.data.check_in|time:"H:i" }}</div>
-              {% if d.data.check_out %}<div class="small"><i class="bi bi-box-arrow-right text-secondary"></i> {{ d.data.check_out|time:"H:i" }}</div>{% endif %}
-            {% elif d.status == 'absent' %}<div class="small text-danger">kelmagan</div>{% endif %}
+              {% if d.data.check_out %}<div class="small"><i class="bi bi-box-arrow-right text-secondary"></i> {{ d.data.check_out|time:"H:i" }}{% if d.data.auto_checkout %} <span class="badge bg-secondary">avto</span>{% endif %}</div>{% endif %}
+            {% elif d.status == 'absent' %}<div class="small text-danger">kelmagan</div>{% elif d.in_month and d.off %}<div class="small text-muted">{{ d.off_label }}</div>{% endif %}
           </td>{% endfor %}
         </tr>{% endfor %}
         </tbody></table></div>
@@ -152,21 +283,114 @@
     </div></div>
   </div>
 
+  <!-- ================= ISH KUNLARI ================= -->
+  <div class="tab-pane fade" id="ishkunlari">
+    <div class="row g-3">
+      <div class="col-lg-8"><div class="card"><div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h5 class="mb-0">{{ w_month|date:"F Y" }}</h5>
+          <div class="d-flex gap-2">
+            <a class="btn btn-sm btn-outline-secondary" href="?wmonth={{ w_prev|date:'Y-m' }}#ishkunlari"><i class="bi bi-chevron-left"></i></a>
+            <a class="btn btn-sm btn-outline-secondary" href="?wmonth={{ w_next|date:'Y-m' }}#ishkunlari"><i class="bi bi-chevron-right"></i></a>
+          </div>
+        </div>
+        <p class="text-muted small mb-2">Kunni bosing — <b>dam olish kuni</b> qilinadi (bayram, ta'til...). Shu kunlari bot tarbiyachilarga «Keldim» tugmasini yubormaydi va ular «kelmagan» hisoblanmaydi.</p>
+        <div class="table-responsive"><table class="table table-bordered text-center mb-2" style="table-layout:fixed;min-width:520px">
+          <thead class="table-light"><tr><th>Du</th><th>Se</th><th>Ch</th><th>Pa</th><th>Ju</th><th>Sh</th><th>Ya</th></tr></thead>
+          <tbody>
+          {% for week in w_weeks %}<tr>
+            {% for d in week %}
+            <td class="p-1 {% if not d.in_month %}bg-light opacity-50{% endif %}" style="height:70px;vertical-align:top">
+              {% if d.info.kind == 'weekly' or d.info.kind == 'holiday' %}
+                <div class="small text-start fw-semibold text-muted">{{ d.date.day }}</div>
+                <div class="small {% if d.info.kind == 'holiday' %}text-warning fw-semibold{% else %}text-muted{% endif %}">{{ d.info.label|truncatechars:14 }}</div>
+              {% else %}
+                <button type="button" class="btn btn-sm w-100 h-100 p-1 {% if d.info.kind == 'dayoff' %}btn-danger{% else %}btn-light border{% endif %}"
+                  data-bs-toggle="modal" data-bs-target="#dayOffModal" data-edit="#dayOffModal"
+                  data-date_from="{{ d.date|date:'Y-m-d' }}" data-date_to="{{ d.date|date:'Y-m-d' }}"
+                  data-reason="{{ d.info.reason }}" data-off="{% if d.info.kind == 'dayoff' %}1{% else %}0{% endif %}">
+                  <div class="small text-start fw-semibold">{{ d.date.day }}</div>
+                  {% if d.info.kind == 'dayoff' %}<div class="small">{{ d.info.label|truncatechars:12 }}</div>{% endif %}
+                </button>
+              {% endif %}
+            </td>{% endfor %}
+          </tr>{% endfor %}
+          </tbody></table></div>
+        <div class="d-flex flex-wrap gap-3 small">
+          <span><span class="badge bg-light text-dark border">&nbsp;</span> ish kuni</span>
+          <span><span class="badge bg-danger">&nbsp;</span> dam olish (belgilangan)</span>
+          <span><span class="badge bg-warning">&nbsp;</span> bayram (dam olish)</span>
+          <span><span class="badge bg-secondary-subtle text-dark border">&nbsp;</span> haftalik dam olish</span>
+        </div>
+      </div></div></div>
+
+      <div class="col-lg-4">
+        {% if user.is_admin %}
+        <div class="card mb-3"><div class="card-body">
+          <h6>Haftalik ish kunlari</h6>
+          <form method="post" action="{% url 'workdays_weekly' %}">
+            {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+            {% for n, label in weekday_names %}
+            <div class="form-check form-check-inline"><input class="form-check-input" type="checkbox" name="weekdays" value="{{ n }}" id="wd{{ n }}" {% if n in w_weekly %}checked{% endif %}>
+              <label class="form-check-label" for="wd{{ n }}">{{ label }}</label></div>
+            {% endfor %}
+            <button class="btn btn-sm btn-primary d-block mt-2">Saqlash</button>
+          </form>
+          <div class="small text-muted mt-2">Belgilanmagan kunlar har hafta dam olish hisoblanadi (masalan yakshanba).</div>
+        </div></div>
+        {% endif %}
+        <div class="card"><div class="card-body">
+          <h6>Yaqin dam olish kunlari</h6>
+          <ul class="list-group list-group-flush">
+            {% for o in w_upcoming %}
+            <li class="list-group-item px-0 d-flex justify-content-between">
+              <span>{{ o.date|date:"d.m.Y" }} <span class="text-muted small">{{ o.date|date:"D" }}</span></span>
+              <span class="small text-muted text-end">{{ o.reason|default:"—" }}{% if o.created_by %}<br>{{ o.created_by.username }}{% endif %}</span>
+            </li>
+            {% empty %}<li class="list-group-item px-0 text-muted">Belgilangan kun yo'q</li>{% endfor %}
+          </ul>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= LOKATSIYA ================= -->
-<!-- 
+  {% if user.is_admin %}
   <div class="tab-pane fade" id="lokatsiya">
     <div class="card"><div class="card-body" style="max-width:720px">
       <p class="text-muted">Tarbiyachi botga location yuborganda, u shu nuqtadan <b>radius</b> ichida bo'lsa "keldi" deb hisoblanadi. Koordinatani Google Maps'da bog'cha ustiga o'ng tugma bosib nusxalang.</p>
       <form method="post" action="{% url 'kindergarten_save' %}">
         {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <div class="row g-3">{% for field in kg_form %}{% include '_field.html' %}{% endfor %}</div> 
+        <div class="row g-3">{% for field in kg_form %}{% include '_field.html' %}{% endfor %}</div>
         <button class="btn btn-primary mt-3"><i class="bi bi-check2-circle me-1"></i>Saqlash</button>
       </form>
     </div></div>
-  </div> -->
-
+  </div>
+  {% endif %}
 </div>
 
+
+<div class="modal fade" id="dayOffModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><form method="post" action="{% url 'workdays_save' %}" class="modal-content">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-calendar-x me-2"></i>Dam olish kuni</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <div class="row g-3">
+        <div class="col-6"><label class="form-label fw-semibold small mb-1">Dan</label><input type="date" name="date_from" class="form-control" required></div>
+        <div class="col-6"><label class="form-label fw-semibold small mb-1">Gacha</label><input type="date" name="date_to" class="form-control" required></div>
+        <div class="col-12"><label class="form-label fw-semibold small mb-1">Sababi</label>
+          <input type="text" name="reason" class="form-control" maxlength="200" placeholder="Masalan: Navro'z bayrami, ta'til"></div>
+      </div>
+      <div class="form-text mt-2">Bir necha kun belgilash uchun «Gacha» sanasini keyinroqqa qo'ying.</div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-light" data-bs-dismiss="modal">Bekor qilish</button>
+      <button type="submit" name="action" value="on" id="btnDayOn" class="btn btn-success d-none"><i class="bi bi-briefcase me-1"></i>Ish kuni qilish</button>
+      <button type="submit" name="action" value="off" class="btn btn-danger"><i class="bi bi-calendar-x me-1"></i>Dam olish kuni qilish</button>
+    </div>
+  </form></div>
+</div>
 {% if user.is_admin %}
 {% url 'teacher_create' as create_url %}
 {% include '_form_modal.html' with modal_id='createModal' title="Yangi tarbiyachi" form=form action=create_url icon='person-plus' %}
@@ -174,4 +398,13 @@
 {% url 'attendance_save' as att_url %}
 {% include '_form_modal.html' with modal_id='attModal' title="Davomatni belgilash / tahrirlash" form=att_form action=att_url icon='clock-history' %}
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  // "Ish kuni qilish" tugmasi faqat allaqachon dam olish deb belgilangan kunda ko'rinadi
+  document.getElementById('dayOffModal')?.addEventListener('show.bs.modal', (e) => {
+    document.getElementById('btnDayOn').classList.toggle('d-none', e.relatedTarget?.dataset.off !== '1');
+  });
+</script>
 {% endblock %}

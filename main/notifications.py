@@ -12,7 +12,7 @@ from django.db.models import F
 from django.urls import reverse
 from django.utils import timezone
 
-from . import stats
+from . import stats, workdays
 from .models import (Child, Kindergarten, NotificationPreference, NotificationType, Product,
                      Teacher, TeacherAttendance)
 
@@ -98,12 +98,15 @@ def _p_attendance():
     teachers = list(Teacher.objects.filter(is_active=True).order_by('full_name').values('id', 'full_name', 'phone'))
     kg = Kindergarten.objects.first()
     came = {a['teacher_id'] for a in atts}
+    workday = workdays.is_workday(today)          # dam olish kuni (yakshanba, bayram...) tarbiyachi 'kelmagan' hisoblanmaydi
     return {
         'teachers_count': len(teachers),
         'present_today': sum(1 for t in teachers if t['id'] in came),
-        'absent': [{'full_name': t['full_name'], 'phone': t['phone']} for t in teachers if t['id'] not in came],
+        'absent': ([{'full_name': t['full_name'], 'phone': t['phone']} for t in teachers if t['id'] not in came]
+                   if workday else []),
+        'workday': workday,
         'late': [(a['teacher__full_name'], a['check_in']) for a in atts if a['is_late']],
-        'work_started': bool(kg and timezone.localtime().time() > kg.work_start),
+        'work_started': bool(workday and kg and timezone.localtime().time() > kg.work_start),
     }
 
 

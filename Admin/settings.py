@@ -6,10 +6,11 @@ env = environ.Env()
 environ.Env.read_env(os.path.join(BASE_DIR, '.env'))
 SECRET_KEY = str(env('SECRET_KEY'))
 # DEBUG = bool(env('DEBUG'))
-DEBUG = False
+DEBUG = True
 BOT_TOKEN = str(env('BOT_TOKEN'))
 BOT_PASSWORD = str(env('BOT_PASSWORD'))
 SITE_URL = str(env('SITE_URL'))
+BOT_AUTO_CHECKOUT_TIME='17:00'
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [

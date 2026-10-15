@@ -1,0 +1,114 @@
+{% extends 'base.html' %}
+{% block title %}Bot sinovi{% endblock %}
+{% block page_title %}Bot sinovi{% endblock %}
+
+{% block content %}
+<div class="row g-3">
+
+  <!-- ================= 1) HOLAT ================= -->
+  <div class="col-lg-5"><div class="card h-100"><div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h5 class="mb-0"><i class="bi bi-clipboard2-check me-2"></i>Holat tekshiruvi</h5>
+      <form method="post">{% csrf_token %}<input type="hidden" name="action" value="check_token">
+        <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat me-1"></i>Tokenni tekshirish</button></form>
+    </div>
+    <ul class="list-group list-group-flush small">
+      <li class="list-group-item d-flex justify-content-between"><span>BOT_TOKEN</span>
+        {% if status.token %}<span class="badge bg-success">yozilgan</span>{% else %}<span class="badge bg-danger">yo'q — settings.py</span>{% endif %}</li>
+      {% if status.me %}
+      <li class="list-group-item d-flex justify-content-between"><span>Telegram javobi</span>
+        {% if status.me.ok %}<span class="badge bg-success">@{{ status.me.username }}</span>
+        {% else %}<span class="badge bg-danger">{{ status.me.error }}</span>{% endif %}</li>
+      {% if status.me.hint %}<li class="list-group-item text-danger">{{ status.me.hint }}</li>{% endif %}
+      {% endif %}
+      <li class="list-group-item d-flex justify-content-between"><span>BOT_PASSWORD</span>
+        {% if status.password %}<span class="badge bg-success">yozilgan</span>{% else %}<span class="badge bg-danger">yo'q — bot hech kimni kiritmaydi</span>{% endif %}</li>
+      <li class="list-group-item d-flex justify-content-between"><span>SITE_URL</span>
+        <span>{% if status.https %}<span class="badge bg-success">https</span>{% else %}<span class="badge bg-warning text-dark">https emas!</span>{% endif %}
+          <code class="ms-1">{{ status.site_url|default:"—" }}</code></span></li>
+      {% if not status.https %}<li class="list-group-item text-warning">Telegram tugma havolasi va brauzer joylashuvi uchun <b>https</b> kerak. Sinash uchun ngrok kabi https manzil ishlating.</li>{% endif %}
+      <li class="list-group-item d-flex justify-content-between"><span>Bog'cha lokatsiyasi</span>
+        {% if status.kindergarten %}<span class="badge bg-success">bor (radius {{ status.radius }} m)</span>{% else %}<span class="badge bg-danger">kiritilmagan</span>{% endif %}</li>
+      <li class="list-group-item d-flex justify-content-between"><span>Tarbiyachilar (botga ulangan)</span>
+        <span class="badge {% if status.teachers_linked == status.teachers_total %}bg-success{% else %}bg-warning text-dark{% endif %}">{{ status.teachers_linked }} / {{ status.teachers_total }}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span>Xodimlar (botga ulangan)</span><span class="badge bg-secondary">{{ status.users_linked }}</span></li>
+      <li class="list-group-item d-flex justify-content-between"><span>Bugun</span>
+        {% if status.today.workday %}<span class="badge bg-success">ish kuni</span>
+        {% else %}<span class="badge bg-danger">dam olish: {{ status.today.label }}</span>{% endif %}</li>
+    </ul>
+    {% if not status.today.workday %}<div class="small text-muted mt-2">Bugun dam olish kuni — kunlik vazifalar o'z vaqtida tarbiyachilarga yuborilmaydi (pastdagi qo'lda ishga tushirish esa baribir yuboradi).</div>{% endif %}
+  </div></div></div>
+
+  <!-- ================= 2) NATIJALAR ================= -->
+  <div class="col-lg-7"><div class="card h-100"><div class="card-body">
+    <h5 class="mb-2"><i class="bi bi-list-check me-2"></i>Natija{% if results_title %}: <span class="text-primary">{{ results_title }}</span>{% endif %}</h5>
+    {% if run_error %}<div class="alert alert-danger">{{ run_error }}</div>{% endif %}
+    {% if results is not None %}
+      <div class="table-responsive"><table class="table table-sm align-middle mb-0">
+        <thead class="table-light"><tr><th>Kimga</th><th>Holat</th><th>Izoh</th></tr></thead>
+        <tbody>
+        {% for r in results %}
+          <tr>
+            <td class="fw-semibold">{{ r.name }}{% if r.chat_id %}<div class="small text-muted"><code>{{ r.chat_id }}</code></div>{% endif %}</td>
+            <td>{% if r.ok is None %}<span class="badge bg-info">havola</span>{% elif r.ok %}<span class="badge bg-success">yuborildi ✅</span>{% else %}<span class="badge bg-danger">xato</span>{% endif %}</td>
+            <td class="small">
+              {% if r.error %}<div class="text-danger">{{ r.error }}</div>{% endif %}
+              {% if r.hint %}<div class="text-muted">💡 {{ r.hint }}</div>{% endif %}
+              {% if r.note %}<div class="text-warning">{{ r.note }}</div>{% endif %}
+              {% if r.link %}<input class="form-control form-control-sm mt-1" value="{{ r.link }}" readonly onclick="this.select()">
+                <a class="small" href="{{ r.link }}" target="_blank">Sahifani ochib ko'rish ↗</a>{% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="3" class="text-center text-muted py-3">Yuboriladigan hech kim topilmadi (Telegram ID yo'q yoki hamma allaqachon kelgan).</td></tr>{% endfor %}
+        </tbody></table></div>
+    {% else %}
+      <div class="text-muted">Pastdagi tugmalardan birini bosing — natija shu yerda ko'rinadi.</div>
+    {% endif %}
+  </div></div></div>
+
+  <!-- ================= 3) TARBIYACHILARGA YUBORISH ================= -->
+  <div class="col-12"><div class="card"><div class="card-body">
+    <h5 class="mb-1"><i class="bi bi-send me-2"></i>Tarbiyachilarga yuborish</h5>
+    <p class="text-muted small">Tarbiyachilarni belgilang. «Faqat havola» belgilansa Telegramga hech narsa yuborilmaydi — havolani o'zingiz ochib sinab ko'rasiz.</p>
+    <form method="post">
+      {% csrf_token %}
+      <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead class="table-light"><tr><th style="width:40px"><input type="checkbox" class="form-check-input" id="chkAll"></th><th>Tarbiyachi</th><th>Telegram</th><th>Bugun</th></tr></thead>
+        <tbody>
+        {% for r in teachers %}
+          <tr>
+            <td><input type="checkbox" class="form-check-input tch" name="teachers" value="{{ r.t.pk }}"></td>
+            <td class="fw-semibold">{{ r.t.full_name }}</td>
+            <td>{% if r.t.telegram_id %}<span class="badge bg-success">ulangan</span> <code class="small">{{ r.t.telegram_id }}</code>{% else %}<span class="badge bg-secondary">ulanmagan</span>{% endif %}</td>
+            <td class="small">
+              {% if r.att.check_in %}keldi {{ r.att.check_in|time:"H:i" }}{% else %}<span class="text-muted">—</span>{% endif %}
+              {% if r.att.check_out %} · ketdi {{ r.att.check_out|time:"H:i" }}{% if r.att.auto_checkout %} (avto){% endif %}{% endif %}
+            </td>
+          </tr>
+        {% empty %}<tr><td colspan="4" class="text-center text-muted py-3">Faol tarbiyachi yo'q</td></tr>{% endfor %}
+        </tbody></table>
+        <div class="input-group">
+          <input type="text" name="text" class="form-control" placeholder="Oddiy matnli xabar (sinov uchun)...">
+          <button class="btn btn-outline-primary" name="action" value="send_text"><i class="bi bi-chat-text me-1"></i>Matn yuborish</button>
+        </div>
+      </div>
+
+    <br>
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <button class="btn btn-success" name="action" value="send_in"><i class="bi bi-geo-alt me-1"></i>«Keldim» tugmasi</button>
+        <button class="btn btn-warning" name="action" value="send_out"><i class="bi bi-house me-1"></i>«Ketdim» tugmasi</button>
+      </div>
+
+    </form>
+  </div></div></div>
+
+ 
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  const all = document.getElementById('chkAll');
+  all?.addEventListener('change', () => document.querySelectorAll('.tch').forEach(c => c.checked = all.checked));
+</script>
+{% endblock %}

@@ -41,7 +41,7 @@
       <tbody>
       {% for r in holidays %}{% with h=r.holiday %}
         <tr class="{% if not h.is_active %}table-secondary{% endif %}">
-          <td class="fw-semibold">{{ h.name }}{% if not h.repeat_yearly %} <span class="badge bg-light text-dark border">bir martalik</span>{% endif %}
+          <td class="fw-semibold">{{ h.name }}{% if not h.repeat_yearly %} <span class="badge bg-light text-dark border">bir martalik</span>{% endif %}{% if h.is_day_off %} <span class="badge bg-danger-subtle text-danger border">dam olish kuni</span>{% endif %}
             {% if h.note %}<div class="small text-muted">{{ h.note }}</div>{% endif %}</td>
           <td>{% if r.next_date %}{{ r.next_date|date:"d.m.Y" }}{% else %}<span class="text-muted">o'tib ketgan</span>{% endif %}</td>
           <td>{% if r.days_left == 0 %}<span class="badge bg-warning text-dark">Bugun!</span>{% elif r.days_left is not None %}{{ r.days_left }} kun{% else %}—{% endif %}</td>
@@ -51,7 +51,7 @@
             <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#holidayEdit" data-edit="#holidayEdit"
               data-action="{% url 'holiday_update' h.pk %}" data-name="{{ h.name }}" data-date="{{ h.date|date:'Y-m-d' }}"
               data-repeat_yearly="{{ h.repeat_yearly|yesno:'1,0' }}" data-remind_days_before="{{ h.remind_days_before }}"
-              data-note="{{ h.note }}" data-is_active="{{ h.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
+              data-note="{{ h.note }}" data-is_day_off="{{ h.is_day_off|yesno:'1,0' }}" data-is_active="{{ h.is_active|yesno:'1,0' }}"><i class="bi bi-pencil"></i></button>
             {% url 'holiday_delete' h.pk as d %}{% include '_post_btn.html' with url=d icon='trash' confirm="Bayram o'chirilsinmi?" title="O'chirish" %}
           </td>{% endif %}
         </tr>

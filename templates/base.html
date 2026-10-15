@@ -123,7 +123,9 @@
             {% if user.is_admin %}
             <li><a href="{% url 'user_list' %}" class="{% if n == 'user_list' %}active{% endif %}">
                 <i class="bi bi-person-gear"></i><span>Foydalanuvchilar</span></a></li>
-            <li><a href="/admin/"><i class="bi bi-gear-fill"></i><span>Admin panel</span></a></li>
+            <li><a href="{% url 'bot_test' %}" class="{% if n == 'bot_test' %}active{% endif %}">
+                <i class="bi bi-robot"></i><span>Bot sinovi</span></a></li>
+            <!-- <li><a href="/admin/"><i class="bi bi-gear-fill"></i><span>Admin panel</span></a></li> -->
             {% endif %}
         </ul>
         {% endwith %}
@@ -141,33 +143,23 @@
 
             <div class="user-info">
                 <!-- Qo'ng'iroqcha -->
-                <!-- <div class="dropdown">
-                    <button class="btn btn-light position-relative" data-bs-toggle="dropdown">
+                <!-- <div class="dropdown"> -->
+                    <!-- <button class="btn btn-light position-relative" data-bs-toggle="dropdown">
                         <i class="bi bi-bell"></i>
                         {% if bell_count %}
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">{{ bell_count }}</span>
                         {% endif %}
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" style="min-width: 300px;">
+                    </button> -->
+                    <!-- <ul class="dropdown-menu dropdown-menu-end" style="min-width: 320px; max-height: 70vh; overflow-y: auto;">
                         <li><h6 class="dropdown-header">Bildirishnomalar</h6></li>
                         <li><hr class="dropdown-divider"></li>
-                        {% if low_stock_count %}
-                        <li><a class="dropdown-item" href="{% url 'product_list' %}?low=1">
-                            <i class="bi bi-exclamation-triangle text-danger me-2"></i>{{ low_stock_count }} ta mahsulot tugayapti</a></li>
-                        {% endif %}
-                        {% if birthdays_today %}
-                        <li><a class="dropdown-item" href="{% url 'dashboard' %}">
-                            <i class="bi bi-cake2 text-warning me-2"></i>Bugun {{ birthdays_today }} ta tug'ilgan kun</a></li>
-                        {% endif %}
-                        {% if debtors_count %}
-                        <li><a class="dropdown-item" href="{% url 'payment_list' %}#qarzdorlar">
-                            <i class="bi bi-cash-stack text-danger me-2"></i>{{ debtors_count }} ta qarzdor</a></li>
-                        {% endif %}
-                        {% if not bell_count %}
+                        {% for n in notifications %}
+                        <li><a class="dropdown-item text-wrap small" href="{{ n.url }}">{{ n.icon }} {{ n.text }}</a></li>
+                        {% empty %}
                         <li><span class="dropdown-item text-muted">Yangi bildirishnoma yo'q</span></li>
-                        {% endif %}
-                    </ul>
-                </div> -->
+                        {% endfor %}
+                    </ul> -->
+                <!-- </div> -->
 
                 <!-- Foydalanuvchi -->
                 <div class="dropdown">

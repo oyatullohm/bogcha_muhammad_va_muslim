@@ -11,16 +11,16 @@ Ishlash tartibi (modal oynalar bilan qulay):
     POST /.../<pk>/delete/ yoki toggle/  -> o'chirish / faolsizlantirish
 Xato bo'lsa messages orqali ko'rsatiladi.
 """
-from .decorators import is_login
 import hmac
 import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from functools import wraps
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
+from .decorators import is_login
 from django.conf import settings
 from django.contrib import messages
+# from django.contrib.auth.decorators import is_login
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
@@ -35,7 +35,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_http_methods, require_POST
 
-from . import attendance, stats
+from . import attendance, stats, workdays
 from .forms import (
     UserCreateForm, UserUpdateForm, TeacherForm, AttendanceForm, KindergartenForm,
     GroupForm, TariffForm, ChildForm, TransactionForm, PaymentForm, ChargeMonthForm,
@@ -45,11 +45,13 @@ from .forms import (
 from .models import (
     User, Kindergarten, Teacher, TeacherAttendance, Group, Tariff, Child, ChildAccount, ChildAttendance,
     Payment, ExpenseCategory, Expense, Product, ProductIn, ProductOut,
-    Meal, DailyMenu, NotificationType, NotificationPreference, Holiday,
+    Meal, DailyMenu, NotificationType, NotificationPreference, Holiday, DayOff, WorkSchedule,
 )
 from . import notifications as notif
 from .notifications import ensure_default_types, get_user_pref
 from bot.models import BotUser
+from bot import services as bot_services
+from bot.models import BotJobRun
 from bot.telegram_api import send_message
 
 # Template'laringiz 'templates/' ichida to'g'ridan-to'g'ri bo'lsa - bo'sh qoldiring.
@@ -276,21 +278,20 @@ def user_toggle(request, pk):
 
 
 # ============================================================ TARBIYACHI + DAVOMAT  (teacher.html)
-WORK_WEEKDAYS = (0, 1, 2, 3, 4)      # dushanba-juma ish kuni (kerak bo'lsa (0,..,5) qiling)
-
-
 def _teacher_month(teacher, month_start):
     month_end = stats.add_months(month_start, 1)
     atts = list(teacher.attendances.filter(date__gte=month_start, date__lt=month_end).order_by('date'))
     today = timezone.localdate()
 
     weeks = stats.month_weeks(month_start, {a.date: a for a in atts})
+    info = workdays.status_map(weeks[0][0]['date'], weeks[-1][-1]['date'])        # haftalik + belgilangan kunlar + bayram
     for week in weeks:
         for cell in week:
             a, d = cell['data'], cell['date']
+            cell['off'], cell['off_label'] = not info[d]['workday'], info[d]['label']
             if a and a.check_in:
                 cell['status'] = 'late' if a.is_late else 'ok'
-            elif cell['in_month'] and d < today and d.weekday() in WORK_WEEKDAYS:
+            elif cell['in_month'] and d < today and info[d]['workday']:
                 cell['status'] = 'absent'
             else:
                 cell['status'] = ''
@@ -338,9 +339,26 @@ def teacher_list(request):
         'present_count': sum(1 for r in rows if r['att'] and r['att'].check_in),
         'selected': selected,
         'form': form, 'edit_form': edit_form, 'att_form': att_form,
+        # (kind, mode, ikonka, matn): link yuborish menyusi
+        'link_actions': [('in', 'send', 'send', "«Keldim» tugmasini botga yuborish"),
+                         ('out', 'send', 'send', "«Ketdim» tugmasini botga yuborish"),
+                         ('in', 'show', 'link-45deg', "«Keldim» havolasini ko'rsatish"),
+                         ('out', 'show', 'link-45deg', "«Ketdim» havolasini ko'rsatish")],
     }
+    # ---- "Ish kunlari" tabi: oy kalendari, haftalik sozlama, yaqin dam olish kunlari
+    wm = parse_month(request.GET.get('wmonth'), today.replace(day=1))
+    w_weeks = stats.month_weeks(wm)
+    w_info = workdays.status_map(w_weeks[0][0]['date'], w_weeks[-1][-1]['date'])
+    for week in w_weeks:
+        for cell in week:
+            cell['info'] = w_info[cell['date']]
+    ctx.update({
+        'w_month': wm, 'w_prev': stats.add_months(wm, -1), 'w_next': stats.add_months(wm, 1), 'w_weeks': w_weeks,
+        'w_weekly': workdays.get_weekdays(), 'weekday_names': workdays.WEEKDAY_NAMES,
+        'w_upcoming': list(DayOff.objects.filter(date__gte=today).select_related('created_by')[:30]),
+    })
     if request.user.is_admin:
-        # ctx['kg_form'] = KindergartenForm(instance=Kindergarten.objects.first())
+        ctx['kg_form'] = KindergartenForm(instance=Kindergarten.objects.first())
         # botga parol bilan kirgan, lekin hali tarbiyachi/xodimga ulanmaganlar
         pending = list(BotUser.objects.filter(verified=True)
                        .exclude(telegram_id__in=Teacher.objects.filter(telegram_id__isnull=False).values('telegram_id'))
@@ -1154,9 +1172,116 @@ def attendance_mark(request, token):
         return JsonResponse({'ok': False, 'message': "Joylashuv noto'g'ri yuborildi."}, status=400)
 
     ok, message, info = attendance.mark(teacher, action, lat, lon)
-    if ok and action == 'in' and info.get('new'):
-        attendance.send_checkout_button(teacher)          # botga "Ketdim" tugmasini qaytaramiz
+    if ok:
+        attendance.after_mark(teacher, action, info)      # bosilgan tugma xabari botdan o'chadi, 'Keldim' bo'lsa 'Ketdim' tugmasi keladi
     return JsonResponse({'ok': ok, 'message': message})
+
+
+# ============================================================ ISH KUNLARI (admin va yordamchi belgilaydi)
+@is_login
+@require_POST
+def workdays_save(request):
+    """Kunni (yoki sanalar oralig'ini) dam olish kuni qilish / ish kuniga qaytarish. Bot dam olish kunlari yozmaydi."""
+    back = back_url(request, reverse('teacher_list') + '#ishkunlari')
+    d1 = parse_date(request.POST.get('date_from'))
+    d2 = parse_date(request.POST.get('date_to')) or d1
+    if not d1 or d2 < d1 or (d2 - d1).days > 90:
+        messages.error(request, "Sana noto'g'ri (oraliq 90 kundan oshmasin).")
+        return redirect(back)
+    reason = request.POST.get('reason', '').strip()[:200]
+    days = [d1 + timedelta(days=i) for i in range((d2 - d1).days + 1)]
+
+    if request.POST.get('action') == 'on':
+        DayOff.objects.filter(date__in=days).delete()
+        messages.success(request, f"{len(days)} kun ish kuniga qaytarildi ✅")
+    else:
+        existing = set(DayOff.objects.filter(date__in=days).values_list('date', flat=True))
+        DayOff.objects.bulk_create([DayOff(date=d, reason=reason, created_by=request.user)
+                                    for d in days if d not in existing])
+        if reason and existing:
+            DayOff.objects.filter(date__in=existing).update(reason=reason)
+        messages.success(request, f"{len(days)} kun dam olish kuni deb belgilandi 🏖 — bot tarbiyachilarga xabar yubormaydi")
+    notif.bump('attendance')                               # bulk amallar signal yubormaydi - keshni o'zimiz yangilaymiz
+    return redirect(back)
+
+
+@admin_required
+@require_POST
+def workdays_weekly(request):
+    """Haftalik ish kunlari (masalan faqat dushanba-shanba)."""
+    days = sorted({int(x) for x in request.POST.getlist('weekdays') if x.isdigit() and 0 <= int(x) <= 6})
+    ws = WorkSchedule.objects.first() or WorkSchedule()
+    ws.work_weekdays = ','.join(str(x) for x in days)
+    ws.save()
+    notif.bump('attendance')
+    messages.success(request, "Haftalik ish kunlari saqlandi ✅")
+    return redirect(back_url(request, reverse('teacher_list') + '#ishkunlari'))
+
+
+# ============================================================ TARBIYACHIGA "KELDIM/KETDIM" LINKINI QO'LDA YUBORISH
+@is_login
+@require_POST
+def teacher_send_link(request, pk):
+    """
+    Bot link yubormagan bo'lsa admin yoki yordamchi qo'lda yuboradi (mode=send) yoki havolani
+    ekranda ko'rsatadi (mode=show) - uni boshqa yo'l bilan (qo'ng'iroq, boshqa messenjer) jo'natish mumkin.
+    """
+    t = get_object_or_404(Teacher, pk=pk, is_active=True)
+    kind = 'out' if request.POST.get('kind') == 'out' else 'in'
+    label = '🏠 Ketdim' if kind == 'out' else '📍 Keldim'
+    back = back_url(request, reverse('teacher_list') + '#davomat')
+    url = attendance.build_url(t, kind)
+
+    if request.POST.get('mode') == 'show':
+        messages.info(request, f"{t.full_name} — «{label}» havolasi (faqat bugun uchun amal qiladi): {url}")
+    elif not t.telegram_id:
+        messages.error(request, f"{t.full_name} botga ulanmagan (Telegram ID yo'q). Havolani qo'lda yuboring: {url}")
+    else:
+        text = (f"{t.full_name}, administrator sizga «{label.split(' ', 1)[1]}» tugmasini yubordi 👇" )
+        ok, err, _ = bot_services.send_button(t, kind, text)
+        if ok:
+            messages.success(request, f"{t.full_name}ga «{label}» tugmasi yuborildi ✅")
+        else:
+            messages.error(request, f"Yuborilmadi: {err}. {bot_services.explain_error(err)} Havola: {url}")
+    return redirect(back)
+
+
+# ============================================================ BOT SINOVI (admin)
+@admin_required
+def bot_test(request):
+    """Bot sinov sahifasi: tarbiyachilarga tugma/matn yuborish, kunlik vazifalarni hozir ishga tushirish, holat tekshiruvi."""
+    results, title, run_error = None, '', ''
+    check_token = False
+    if request.method == 'POST':
+        action = request.POST.get('action')
+        ids = [i for i in (to_int(x) for x in request.POST.getlist('teachers')) if i]
+        preview = bool(request.POST.get('preview'))
+        if action in ('send_in', 'send_out', 'send_text') and not ids:
+            messages.error(request, "Kamida bitta tarbiyachini belgilang.")
+        elif action in ('send_in', 'send_out'):
+            kind = 'in' if action == 'send_in' else 'out'
+            results = bot_services.send_checkin_buttons(ids, kind, preview)
+            title = ("«Keldim»" if kind == 'in' else "«Ketdim»") + (" havolalari" if preview else " tugmasi yuborildi")
+        elif action == 'send_text':
+            text = request.POST.get('text', '').strip()
+            if not text:
+                messages.error(request, "Matnni yozing.")
+            else:
+                results, title = bot_services.send_text_to_teachers(ids, text), "Matn yuborildi"
+        elif action == 'run_job':
+            name = request.POST.get('job')
+            results, run_error = bot_services.run_job_now(name)
+            title = f"Vazifa: {name}"
+        elif action == 'check_token':
+            check_token = True
+
+    today = timezone.localdate()
+    att = {a.teacher_id: a for a in TeacherAttendance.objects.filter(date=today)}
+    teachers = [{'t': t, 'att': att.get(t.pk)} for t in Teacher.objects.filter(is_active=True).order_by('full_name')]
+    return render(request, tpl('bot_test.html'), {
+        'status': bot_services.bot_status(check_token), 'teachers': teachers, 'jobs': bot_services.jobs_info(),
+        'runs': BotJobRun.objects.filter(date=today), 'results': results, 'results_title': title, 'run_error': run_error,
+    })
 
 
 # ============================================================ ADMIN: BOTGA KIRGANLARNI ULASH

@@ -8,7 +8,6 @@ import math
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
-from datetime import time as dtime
 
 from django.conf import settings
 from django.db import connections
@@ -16,12 +15,12 @@ from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 
-from main import attendance
-from main.models import Teacher, TeacherAttendance, User
+from main import attendance, workdays
+from main.models import Kindergarten, Teacher, TeacherAttendance, User
 from main.notifications import build_notifications, clear_nav_cache
 
-from .models import BotJobRun, BotUser
-from .telegram_api import send_message
+from .models import BotButtonMessage, BotJobRun, BotUser
+from .telegram_api import collect, delete_message, get_me, send_message, send_message_result
 
 log = logging.getLogger('bot')
 
@@ -35,6 +34,7 @@ class Reply:
     text: str
     buttons: list = field(default_factory=list)      # [(matn, url)]
     delete_incoming: bool = False                    # foydalanuvchi yozgan xabarni (parol) o'chirish
+    track: tuple = None                              # (teacher_id, 'in'|'out') - yuborilgan tugmali xabarni eslab qolish
 
 
 # ------------------------------------------------------------ KIM EKANINI ANIQLASH
@@ -94,6 +94,40 @@ def notify_admins_new_user(bu):
                      [("🔗 Saytda ulash", link)])
 
 
+# ------------------------------------------------------------ KELDIM / KETDIM TUGMALI XABARLAR
+BUTTON_LABELS = {'in': "📍 Keldim", 'out': "🏠 Ketdim"}
+
+
+def track_button(teacher_id, action, chat_id, message_id):
+    BotButtonMessage.objects.create(teacher_id=teacher_id, action=action, date=timezone.localdate(),
+                                    chat_id=chat_id, message_id=message_id)
+
+
+def send_button(teacher, action, text):
+    """
+    Tarbiyachiga «Keldim»/«Ketdim» tugmali xabar yuboradi va xabar ID sini eslab qoladi
+    (tugma bosilgach xabar o'chirilishi uchun). Qaytaradi: (ok, xato, havola)
+    """
+    url = attendance.build_url(teacher, action)
+    res = send_message_result(teacher.telegram_id, text, [(BUTTON_LABELS[action], url)])
+    if res['ok'] and res['message_id']:
+        track_button(teacher.pk, action, teacher.telegram_id, res['message_id'])
+    return res['ok'], res['error'], url
+
+
+def clear_buttons(teacher_id, action):
+    """Tugma bosildi -> shu tarbiyachining shu turdagi (keldim/ketdim) xabarlari chatdan o'chadi."""
+    msgs = list(BotButtonMessage.objects.filter(teacher_id=teacher_id, action=action))
+    for m in msgs:
+        delete_message(m.chat_id, m.message_id)
+    BotButtonMessage.objects.filter(pk__in=[m.pk for m in msgs]).delete()
+    return len(msgs)
+
+
+def cleanup_old_buttons():
+    BotButtonMessage.objects.filter(date__lt=timezone.localdate() - timedelta(days=3)).delete()
+
+
 # ------------------------------------------------------------ XABARGA JAVOB
 def handle(tg, text):
     """tg = {'id', 'first_name', 'last_name', 'username'}; qaytaradi: Reply"""
@@ -134,11 +168,13 @@ def _teacher_reply(t, cmd):
     if cmd == 'keldim':
         if att and att.check_in:
             return Reply(f"✅ Siz bugun {timezone.localtime(att.check_in):%H:%M} da kelgansiz.\nKetishni belgilash: /ketdim")
-        return Reply("Bog'chaga kelganingizda tugmani bosing 👇", [("📍 Keldim", attendance.build_url(t, 'in'))])
+        return Reply("Bog'chaga kelganingizda tugmani bosing 👇", [("📍 Keldim", attendance.build_url(t, 'in'))],
+                     track=(t.pk, 'in'))
     if cmd == 'ketdim':
         if not (att and att.check_in):
             return Reply("Avval kelganingizni belgilang: /keldim")
-        return Reply("Ketayotganingizda tugmani bosing 👇", [("🏠 Ketdim", attendance.build_url(t, 'out'))])
+        return Reply("Ketayotganingizda tugmani bosing 👇", [("🏠 Ketdim", attendance.build_url(t, 'out'))],
+                     track=(t.pk, 'out'))
     return Reply(f"Assalomu alaykum, {t.full_name}! 👋\n\nHar ish kuni ertalab «Keldim» tugmasi keladi.\n\n"
                  "/keldim — kelganimni belgilash\n/ketdim — ketganimni belgilash\n/id — Telegram ID")
 
@@ -159,13 +195,14 @@ def _user_reply(u, cmd):
 # ------------------------------------------------------------ KUNLIK VAZIFALAR
 def job_checkin_prompts():
     """Har ertalab: bugun hali kelmagan tarbiyachilarga 'Keldim' tugmasi."""
+    cleanup_old_buttons()
     today = timezone.localdate()
     came = list(TeacherAttendance.objects.filter(date=today, check_in__isnull=False).values_list('teacher_id', flat=True))
     sent = 0
     for t in Teacher.objects.filter(is_active=True, telegram_id__isnull=False).exclude(pk__in=came):
         text = (f"Assalomu alaykum, {t.full_name}! 🌅\n\nIsh kuni boshlandi. "
                 "Bog'chaga kelganingizda quyidagi tugmani bosing 👇")
-        sent += send_message(t.telegram_id, text, [("📍 Keldim", attendance.build_url(t, 'in'))])
+        sent += send_button(t, 'in', text)[0]
         time.sleep(0.05)                              # Telegram cheklovidan oshib ketmaslik uchun
     return sent
 
@@ -179,8 +216,7 @@ def job_checkout_prompts():
     sent = 0
     for att in pending:
         t = att.teacher
-        sent += send_message(t.telegram_id, f"{t.full_name}, ish kuni tugadimi? 🏠\nKetayotganingizda tugmani bosing 👇",
-                             [("🏠 Ketdim", attendance.build_url(t, 'out'))])
+        sent += send_button(t, 'out', f"{t.full_name}, ish kuni tugadimi? 🏠\nKetayotganingizda tugmani bosing 👇")[0]
         time.sleep(0.05)
     return sent
 
@@ -202,16 +238,12 @@ def job_notify_users(include=None, exclude=None):
     return sent
 
 
-def _work_days():
-    return tuple(getattr(settings, 'BOT_WORK_DAYS', (0, 1, 2, 3, 4)))      # dushanba-juma
-
-
 # (nomi, vaqt sozlamasi, standart vaqt, faqat ish kunlari, funksiya)
 JOBS = [
     ('checkin_prompt', 'BOT_CHECKIN_TIME', '07:20', True, job_checkin_prompts),
     ('notify_users', 'BOT_NOTIFY_TIME', '07:30', False, lambda: job_notify_users(exclude={'teacher_late'})),
     ('late_check', 'BOT_LATE_CHECK_TIME', '08:30', True, lambda: job_notify_users(include={'teacher_late'})),
-    ('checkout_prompt', 'BOT_CHECKOUT_TIME', '18:00', True, job_checkout_prompts),
+    ('checkout_prompt', 'BOT_CHECKOUT_TIME', '17:00', True, job_checkout_prompts),
 ]
 
 
@@ -224,7 +256,7 @@ def run_due_jobs(now=None):
         scheduled = now.replace(hour=h, minute=m, second=0, microsecond=0)
         if not (scheduled <= now <= scheduled + timedelta(minutes=CATCHUP_MINUTES)):
             continue
-        if workdays_only and today.weekday() not in _work_days():
+        if workdays_only and not workdays.is_workday(today):      # dam olish kuni: tarbiyachilarga xabar yuborilmaydi
             continue
         run, created = BotJobRun.objects.get_or_create(job=name, date=today)
         if not created:                               # bugun allaqachon bajarilgan (bot qayta ishga tushgan bo'lsa ham)
@@ -243,3 +275,126 @@ def run_due_jobs_threadsafe():
         return run_due_jobs()
     finally:
         connections.close_all()                       # har oqim o'z DB ulanishini yopsin
+
+
+# ------------------------------------------------------------ SINOV SAHIFASI UCHUN (admin: "Bot sinovi")
+JOB_LABELS = {
+    'checkin_prompt': "Tarbiyachilarga «📍 Keldim» tugmasi (hali kelmaganlarga)",
+    'notify_users': "Foydalanuvchilarga bildirishnomalar (tug'ilgan kun, bayram, ombor, qarzdor)",
+    'late_check': "Kelmagan / kechikkan tarbiyachilar haqida foydalanuvchilarga xabar",
+    'checkout_prompt': "«🏠 Ketdim» eslatmasi (kelgan, lekin ketmaganlarga)",
+}
+
+
+def jobs_info():
+    """[{'name', 'label', 'time', 'workdays'}] - sozlamalardagi vaqt bilan."""
+    return [{'name': n, 'label': JOB_LABELS[n], 'time': getattr(settings, st, df), 'workdays': wd}
+            for n, st, df, wd, _ in JOBS]
+
+
+def explain_error(error):
+    """Telegram xatosini tushunarli qilib tushuntiradi."""
+    e = (error or '').lower()
+    if 'bot can\'t initiate' in e or 'chat not found' in e:
+        return "Tarbiyachi botga hali /start bosmagan (yoki ID noto'g'ri). U botni ochib /start bosishi kerak."
+    if 'blocked by the user' in e:
+        return "Foydalanuvchi botni bloklagan."
+    if 'user is deactivated' in e:
+        return "Telegram akkaunt o'chirilgan."
+    if 'unauthorized' in e or 'not found' == e.strip():
+        return "BOT_TOKEN noto'g'ri."
+    if 'bot_token' in e:
+        return "settings.py da BOT_TOKEN yozilmagan."
+    if 'timed out' in e or 'urlopen' in e or 'resolution' in e or 'unreachable' in e:
+        return "Serverdan Telegramga ulanib bo'lmayapti (internet yoki firewall)."
+    return ''
+
+
+def _names_by_chat():
+    names = {t.telegram_id: f"{t.full_name} (tarbiyachi)" for t in Teacher.objects.filter(telegram_id__isnull=False)}
+    names.update({u.telegram_id: f"{u.get_full_name() or u.username} (xodim)" for u in User.objects.filter(telegram_id__isnull=False)})
+    return names
+
+
+def _rows_from_items(items):
+    names = _names_by_chat()
+    return [{'name': names.get(i['chat_id'], str(i['chat_id'])), 'chat_id': i['chat_id'], 'ok': i['ok'],
+             'error': i['error'], 'hint': explain_error(i['error']), 'note': i['note'], 'link': ''} for i in items]
+
+
+def bot_status(check_token=False):
+    """Sinov sahifasining tepasidagi tekshiruv ro'yxati. check_token=True bo'lsa Telegramga getMe yuboradi."""
+    kg = Kindergarten.objects.first()
+    site = getattr(settings, 'SITE_URL', '')
+    st = {
+        'token': bool(getattr(settings, 'BOT_TOKEN', '')),
+        'password': bool(getattr(settings, 'BOT_PASSWORD', '')),
+        'site_url': site, 'https': site.startswith('https://'),
+        'kindergarten': bool(kg), 'radius': kg.radius_m if kg else None,
+        'teachers_total': Teacher.objects.filter(is_active=True).count(),
+        'teachers_linked': Teacher.objects.filter(is_active=True, telegram_id__isnull=False).count(),
+        'users_linked': User.objects.filter(is_active=True, telegram_id__isnull=False).count(),
+        'me': None,
+        'today': workdays.status_map(timezone.localdate(), timezone.localdate())[timezone.localdate()],
+    }
+    if check_token:
+        res = get_me()
+        st['me'] = {'ok': bool(res.get('ok')), 'username': (res.get('result') or {}).get('username', ''),
+                    'error': res.get('description', ''), 'hint': explain_error(res.get('description', ''))}
+    return st
+
+
+def send_checkin_buttons(teacher_ids, action, preview=False):
+    """
+    Tanlangan tarbiyachilarga 'Keldim' (action='in') yoki 'Ketdim' ('out') tugmasini yuboradi.
+    preview=True - Telegramga YUBORMAYDI, faqat havolani ko'rsatadi (o'zingiz ochib sinab ko'rish uchun).
+    """
+    rows = []
+    for t in Teacher.objects.filter(pk__in=teacher_ids, is_active=True).order_by('full_name'):
+        row = {'name': t.full_name, 'chat_id': t.telegram_id, 'link': attendance.build_url(t, action),
+               'ok': None, 'error': '', 'hint': '', 'note': ''}
+        if preview:
+            row['note'] = "Faqat havola (yuborilmadi)"
+        elif not t.telegram_id:
+            row.update(ok=False, error="Telegram ID yo'q", hint="Tarbiyachi hali botga ulanmagan: «Tarbiyachilar» → «Botga kirganlar».")
+        else:
+            if action == 'in':
+                text = (f"🧪 Sinov xabari\n\nAssalomu alaykum, {t.full_name}! 🌅\nBog'chaga kelganingizda "
+                        "quyidagi tugmani bosing 👇")
+            else:
+                text = f"🧪 Sinov xabari\n\n{t.full_name}, ketayotganingizda quyidagi tugmani bosing 👇"
+            ok, err, _ = send_button(t, action, text)
+            row.update(ok=ok, error=err, hint=explain_error(err))
+        rows.append(row)
+    return rows
+
+
+def send_text_to_teachers(teacher_ids, text):
+    rows = []
+    for t in Teacher.objects.filter(pk__in=teacher_ids, is_active=True).order_by('full_name'):
+        row = {'name': t.full_name, 'chat_id': t.telegram_id, 'link': '', 'ok': False, 'error': '', 'hint': '', 'note': ''}
+        if not t.telegram_id:
+            row.update(error="Telegram ID yo'q", hint="Tarbiyachi hali botga ulanmagan.")
+        else:
+            res = send_message_result(t.telegram_id, text)
+            ok, err = res['ok'], res['error']
+            row.update(ok=ok, error=err, hint=explain_error(err))
+        rows.append(row)
+    return rows
+
+
+def run_job_now(name):
+    """
+    Kunlik vazifani VAQTINI KUTMASDAN hozir bajaradi (sinov uchun). BotJobRun ga yozilmaydi,
+    shuning uchun real vaqtida vazifa baribir o'z vaqtida ishlaydi. Qaytaradi: (qatorlar, xato yoki '')
+    """
+    job = next((j for j in JOBS if j[0] == name), None)
+    if not job:
+        return [], "Noma'lum vazifa."
+    try:
+        with collect() as items:
+            job[4]()
+    except Exception as e:
+        log.exception("Sinov vazifasi xato berdi: %s", name)
+        return [], f"Vazifa xato berdi: {e}"
+    return _rows_from_items(items), ''

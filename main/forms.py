@@ -52,7 +52,7 @@ class BForm(BootstrapMixin, forms.ModelForm):
 class UserCreateForm(BootstrapMixin, UserCreationForm):
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ('username', 'first_name', 'last_name', 'role', 'phone', 'birth_date', 'photo', 'telegram_id')
+        fields = ('username', 'role', 'phone', 'birth_date', 'telegram_id')
         widgets = {'birth_date': date_w()}
 
 
@@ -113,8 +113,8 @@ class AttendanceForm(BForm):
 class KindergartenForm(BForm):
     class Meta:
         model = Kindergarten
-        fields = ('name', 'lat', 'lon', 'radius_m', 'work_start')
-        widgets = {'work_start': time_w()}
+        fields = ('name', 'lat', 'lon', 'radius_m', 'work_start', 'auto_checkout_time')
+        widgets = {'work_start': time_w(), 'auto_checkout_time': time_w()}
 
 
 # ------------------------------------------------------------ GURUH / TARIF / BOLA
@@ -264,7 +264,7 @@ class ProductOutForm(BForm):
 class MealForm(BForm):
     class Meta:
         model = Meal
-        fields = ('name', 'is_active')
+        fields = ('name', 'description', 'photo', 'is_active')
         widgets = {'description': forms.Textarea(attrs={'rows': 2})}
 
 
@@ -291,7 +291,7 @@ class NotificationTypeForm(BForm):
 class HolidayForm(BForm):
     class Meta:
         model = Holiday
-        fields = ('name', 'date', 'repeat_yearly', 'remind_days_before', 'note', 'is_active')
+        fields = ('name', 'date', 'repeat_yearly', 'remind_days_before', 'is_day_off', 'note', 'is_active')
         widgets = {'date': date_w()}
 
 

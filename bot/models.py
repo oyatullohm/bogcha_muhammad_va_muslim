@@ -38,3 +38,19 @@ class BotJobRun(models.Model):
 
     def __str__(self):
         return f"{self.job} {self.date}"
+
+
+class BotButtonMessage(models.Model):
+    """
+    Tarbiyachiga yuborilgan «Keldim» / «Ketdim» tugmali xabar. Tugma bosilib davomat yozilgach,
+    shu xabarlar chatdan o'chiriladi (qayta bosilmasin va chat toza qolsin).
+    """
+    teacher_id = models.PositiveIntegerField(db_index=True)
+    action = models.CharField(max_length=3)                   # 'in' | 'out'
+    date = models.DateField()
+    chat_id = models.BigIntegerField()
+    message_id = models.BigIntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.teacher_id} {self.action} #{self.message_id}"

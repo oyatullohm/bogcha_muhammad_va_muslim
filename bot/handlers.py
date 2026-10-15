@@ -23,7 +23,10 @@ async def on_text(message: Message):
     u = message.from_user
     tg = {'id': u.id, 'first_name': u.first_name, 'last_name': u.last_name, 'username': u.username}
     reply = await sync_to_async(services.handle, thread_sensitive=True)(tg, message.text)
-    await message.answer(reply.text, reply_markup=_keyboard(reply.buttons))
+    sent = await message.answer(reply.text, reply_markup=_keyboard(reply.buttons))
+    if reply.track:                                   # tugma bosilgach shu xabar o'chirilishi uchun ID ni eslab qolamiz
+        await sync_to_async(services.track_button, thread_sensitive=True)(
+            reply.track[0], reply.track[1], message.chat.id, sent.message_id)
     if reply.delete_incoming:                         # parol chatda ko'rinib qolmasin
         try:
             await message.delete()

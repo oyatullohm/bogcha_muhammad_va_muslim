@@ -2,9 +2,9 @@
 from django.db.models.signals import m2m_changed, post_delete, post_save
 from django.dispatch import receiver
 
-from .models import (AccountTransaction, Child, Expense, Holiday, Kindergarten, NotificationPreference,
+from .models import (AccountTransaction, Child, DayOff, Expense, Holiday, Kindergarten, NotificationPreference,
                      NotificationType, Payment, Product, ProductIn, ProductOut, Teacher,
-                     TeacherAttendance, User)
+                     TeacherAttendance, User, WorkSchedule)
 from .notifications import bump
 
 AFFECTS = {
@@ -15,7 +15,7 @@ AFFECTS = {
     Payment: ('debtors', 'finance'), AccountTransaction: ('debtors',),
     Expense: ('finance',),
     TeacherAttendance: ('attendance',), Kindergarten: ('attendance',),
-    Holiday: ('holidays',),
+    Holiday: ('holidays', 'attendance'), DayOff: ('attendance',), WorkSchedule: ('attendance',),
     NotificationType: ('pref',), NotificationPreference: ('pref',),
 }
 

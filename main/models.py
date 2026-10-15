@@ -50,6 +50,7 @@ class Kindergarten(models.Model):
     lon = models.FloatField()
     radius_m = models.PositiveIntegerField(default=100, help_text="Metrda")
     work_start = models.TimeField(default="08:00")
+    auto_checkout_time = models.TimeField("Ketish vaqti (Ketdim bosilmasa)", default="17:00")
 
     def __str__(self):
         return self.name
@@ -95,6 +96,7 @@ class TeacherAttendance(models.Model):
     check_out_lon = models.FloatField(null=True, blank=True)
 
     is_late = models.BooleanField(default=False)  # ✅ YANGI: kechikish (notification uchun kerak)
+    auto_checkout = models.BooleanField("Ketish vaqti avtomatik qo'yilgan", default=False)
 
     class Meta:
         unique_together = ('teacher', 'date')
@@ -645,6 +647,7 @@ class Holiday(models.Model):
     repeat_yearly = models.BooleanField("Har yili takrorlansin", default=True)
     remind_days_before = models.PositiveSmallIntegerField("Necha kun oldin eslatilsin", default=3)
     note = models.CharField("Izoh", max_length=255, blank=True)
+    is_day_off = models.BooleanField("Dam olish kuni (bot tarbiyachilarga yozmaydi)", default=False)
     is_active = models.BooleanField("Faol", default=True)
 
     class Meta:
@@ -671,3 +674,28 @@ class ChildAttendance(models.Model):
 
     def __str__(self):
         return f"{self.child} - {self.date}"
+
+
+# ============================================================
+# ISH KUNLARI: dam olish kunlari (bot shu kunlari tarbiyachilarga xabar yubormaydi)
+# ============================================================
+class DayOff(models.Model):
+    """Aniq sana dam olish kuni (bayram, ta'til, ob-havo...). Admin ham, yordamchi ham belgilay oladi."""
+    date = models.DateField(unique=True)
+    reason = models.CharField("Sababi", max_length=200, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['date']
+
+    def __str__(self):
+        return f"{self.date} {self.reason}".strip()
+
+
+class WorkSchedule(models.Model):
+    """Haftalik ish kunlari (yagona yozuv). 0=dushanba ... 6=yakshanba. Bo'sh qolsa dushanba-juma."""
+    work_weekdays = models.CharField(max_length=20, default='0,1,2,3,4', blank=True)
+
+    def __str__(self):
+        return self.work_weekdays
