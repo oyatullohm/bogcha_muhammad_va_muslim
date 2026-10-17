@@ -6,6 +6,7 @@
 {% block content %}
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#davomat"><i class="bi bi-clock-history me-1"></i>Davomat</button></li>
+  <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#oylik"><i class="bi bi-calendar3 me-1"></i>Oylik davomat</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tarbiyachilar"><i class="bi bi-person-badge me-1"></i>Tarbiyachilar</button></li>
   <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#ishkunlari"><i class="bi bi-calendar-x me-1"></i>Ish kunlari</button></li>
   {% if user.is_admin %}<li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#lokatsiya"><i class="bi bi-geo-alt me-1"></i>Bog'cha lokatsiyasi</button></li>{% endif %}
@@ -31,7 +32,7 @@
           <tr>
             <td class="fw-semibold">{{ r.teacher.full_name }}</td>
             <td>{{ r.att.check_in|time:"H:i"|default:"—" }}</td>
-            <td>{{ r.att.check_out|time:"H:i"|default:"—" }}{% if r.att.auto_checkout %} <span class="badge bg-secondary" title="Ketdim bosilmagan - avtomatik qo'yilgan">avto</span>{% endif %}</td>
+            <td>{{ r.att.check_out|time:"H:i"|default:"—" }}{% if r.att.auto_checkout %} <span class="badge bg-secondary" title="Ketish vaqti avtomatik qo'yilgan (Ketdim bosilmagan yoki 17:00 dan keyin bosilgan)">avto</span>{% endif %}</td>
             <td>{% if r.att.worked_hours %}{{ r.att.worked_hours }} soat{% else %}—{% endif %}</td>
             <td>
               {% if not r.att or not r.att.check_in %}<span class="badge bg-danger">Kelmagan</span>
@@ -39,133 +40,10 @@
               {% else %}<span class="badge bg-success">Vaqtida</span>{% endif %}
             </td>
             <td class="text-end">
-              <div class="dropdown">
-                <button type="button"
-                          class="btn btn-sm btn-outline-success"
-                          data-bs-toggle="modal"
-                          data-bs-target="#sendLinkModal{{ r.teacher.pk }}">
-                      <i class="bi bi-send me-1"></i>
-                      Yuborish
-                  </button>
-                  <div class="modal fade"
-     id="sendLinkModal{{ r.teacher.pk }}"
-     tabindex="-1"
-     aria-labelledby="sendLinkModalLabel{{ r.teacher.pk }}"
-     aria-hidden="true">
-
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-
-            <div class="modal-header">
-                <h5 class="modal-title"
-                    id="sendLinkModalLabel{{ r.teacher.pk }}">
-                    <i class="bi bi-send me-2"></i>
-                    Havola yuborish
-                </h5>
-
-                <button type="button"
-                        class="btn-close"
-                        data-bs-dismiss="modal"
-                        aria-label="Yopish">
-                </button>
-            </div>
-
-            <div class="modal-body">
-
-                <div class="text-center mb-4">
-                    <div class="mb-2">
-                        <i class="bi bi-person-circle"
-                           style="font-size: 48px;"></i>
-                    </div>
-
-                    <h5 class="mb-1">
-                        {{ r.teacher.full_name }}
-                    </h5>
-
-                    <small class="text-muted">
-                        Qaysi havolani yubormoqchisiz?
-                    </small>
-                </div>
-
-                <div class="d-grid gap-2">
-
-                    <!-- Keldim yuborish -->
-                    <form method="post"
-                          action="{% url 'teacher_send_link' r.teacher.pk %}">
-                        {% csrf_token %}
-
-                        <input type="hidden"
-                               name="next"
-                               value="{{ request.get_full_path }}">
-
-                        <input type="hidden"
-                               name="kind"
-                               value="in">
-
-                        <input type="hidden"
-                               name="mode"
-                               value="send">
-
-                        <button type="submit"
-                                class="btn btn-success w-100">
-                            <i class="bi bi-geo-alt me-2"></i>
-                            Keldim yuborish
-                        </button>
-                    </form>
-
-
-                    <!-- Ketdim yuborish -->
-                    <form method="post"
-                          action="{% url 'teacher_send_link' r.teacher.pk %}">
-                        {% csrf_token %}
-
-                        <input type="hidden"
-                               name="next"
-                               value="{{ request.get_full_path }}">
-
-                        <input type="hidden"
-                               name="kind"
-                               value="out">
-
-                        <input type="hidden"
-                               name="mode"
-                               value="send">
-
-                        <button type="submit"
-                                class="btn btn-warning w-100">
-                            <i class="bi bi-house-door me-2"></i>
-                            Ketdim yuborish
-                        </button>
-                    </form>
-
-                </div>
-
-            </div>
-
-            <div class="modal-footer">
-                <button type="button"
-                        class="btn btn-secondary"
-                        data-bs-dismiss="modal">
-                    Yopish
-                </button>
-            </div>
-
-        </div>
-    </div>
-</div>
-                <ul class="dropdown-menu dropdown-menu-end">
-                  <li><h6 class="dropdown-header">{{ r.teacher.full_name }}</h6></li>
-                  {% for kind, mode, icon, text in link_actions %}
-                  <li>
-                    <form method="post" action="{% url 'teacher_send_link' r.teacher.pk %}">
-                      {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
-                      <input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="mode" value="{{ mode }}">
-                      <button class="dropdown-item"><i class="bi bi-{{ icon }} me-2"></i>{{ text }}</button>
-                    </form>
-                  </li>
-                  {% endfor %}
-                </ul>
-              </div>
+              <button type="button" class="btn btn-sm btn-outline-success" title="Tarbiyachiga «Keldim/Ketdim» linkini yuborish"
+                data-bs-toggle="modal" data-bs-target="#linkModal" data-edit="#linkModal"
+                data-action="{% url 'teacher_send_link' r.teacher.pk %}" data-who="{{ r.teacher.full_name }}"
+                data-tg="{% if r.teacher.telegram_id %}1{% else %}0{% endif %}"><i class="bi bi-send me-1"></i>Link</button>
             </td>
             {% if user.is_admin %}
             <td class="text-end"><button class="btn btn-sm btn-outline-primary" title="Qo'lda belgilash/tahrirlash"
@@ -179,7 +57,55 @@
         </tbody></table></div>
     </div></div>
   </div>
-  
+
+  <!-- ================= OYLIK DAVOMAT (hamma tarbiyachi x oy kunlari) ================= -->
+  <div class="tab-pane fade" id="oylik">
+    <div class="card"><div class="card-body">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h5 class="mb-0">{{ am_month|date:"F Y" }} — oylik davomat</h5>
+        <div class="d-flex gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="?amonth={{ am_prev|date:'Y-m' }}#oylik"><i class="bi bi-chevron-left"></i></a>
+          <a class="btn btn-sm btn-outline-secondary" href="?#oylik">Shu oy</a>
+          <a class="btn btn-sm btn-outline-secondary" href="?amonth={{ am_next|date:'Y-m' }}#oylik"><i class="bi bi-chevron-right"></i></a>
+        </div>
+      </div>
+      <div class="table-responsive"><table class="table table-sm table-bordered text-center align-middle mb-2">
+        <thead class="table-light"><tr>
+          <th class="text-start" style="position:sticky;left:0;z-index:2;background:#f8f9fa;min-width:150px">Tarbiyachi</th>
+          {% for d in am_days %}<th class="{% if d.off %}text-muted{% endif %}" style="font-size:.7rem;min-width:36px">{{ d.date.day }}<div class="fw-normal">{{ d.wd }}</div></th>{% endfor %}
+          <th>Kelgan</th><th>Kech.</th><th>Soat</th>
+        </tr></thead>
+        <tbody>
+        {% for r in am_rows %}
+          <tr>
+            <td class="text-start fw-semibold text-nowrap" style="position:sticky;left:0;z-index:1;background:#fff">
+              <a class="text-decoration-none" href="?id={{ r.teacher.pk }}#tarbiyachilar" title="Batafsil kalendar">{{ r.teacher.full_name }}</a></td>
+            {% for c in r.cells %}
+            <td class="p-0 {% if c.status == 'ok' %}table-success{% elif c.status == 'late' %}table-warning{% elif c.status == 'absent' %}table-danger{% elif c.status == 'off' %}bg-light{% endif %}"
+                style="font-size:.62rem;height:34px"
+                {% if c.att.check_in %}title="{{ r.teacher.full_name }} · {{ c.date|date:'d.m' }}: {{ c.att.check_in|time:'H:i' }}{% if c.att.check_out %} – {{ c.att.check_out|time:'H:i' }}{% if c.att.auto_checkout %} (avto){% endif %}{% endif %}{% if c.att.is_late %} · kechikdi{% endif %}"{% endif %}>
+              {% if user.is_admin and c.status != 'future' %}
+              <button type="button" class="btn btn-link p-0 w-100 h-100 text-decoration-none text-reset" style="font-size:.62rem"
+                data-bs-toggle="modal" data-bs-target="#attModal" data-edit="#attModal"
+                data-action="{% url 'attendance_save' %}" data-teacher="{{ r.teacher.pk }}" data-date="{{ c.date|date:'Y-m-d' }}"
+                data-check_in="{{ c.att.check_in|date:'Y-m-d\TH:i' }}" data-check_out="{{ c.att.check_out|date:'Y-m-d\TH:i' }}"
+                data-is_late="{{ c.att.is_late|yesno:'1,0' }}">{% if c.att.check_in %}{{ c.att.check_in|time:"H:i" }}{% else %}&nbsp;{% endif %}</button>
+              {% elif c.att.check_in %}{{ c.att.check_in|time:"H:i" }}{% endif %}
+            </td>
+            {% endfor %}
+            <td class="fw-bold">{{ r.came }}</td><td class="text-warning fw-bold">{{ r.late }}</td><td>{{ r.hours }}</td>
+          </tr>
+        {% empty %}<tr><td colspan="40" class="text-muted py-3">Faol tarbiyachi yo'q</td></tr>{% endfor %}
+        </tbody></table></div>
+      <div class="d-flex flex-wrap gap-3 small">
+        <span><span class="badge bg-success">&nbsp;</span> vaqtida (kelgan vaqti)</span>
+        <span><span class="badge bg-warning">&nbsp;</span> kechikkan</span>
+        <span><span class="badge bg-danger">&nbsp;</span> kelmagan (ish kuni)</span>
+        <span><span class="badge bg-secondary-subtle border text-dark">&nbsp;</span> dam olish kuni</span>
+        {% if user.is_admin %}<span class="text-muted">· Katakni bossangiz keldi/ketdini tuzatish mumkin. Ustiga olib borsangiz ketish vaqti ko'rinadi.</span>{% endif %}
+      </div>
+    </div></div>
+  </div>
 
   <!-- ================= TARBIYACHILAR ================= -->
   <div class="tab-pane fade" id="tarbiyachilar">
@@ -391,6 +317,30 @@
     </div>
   </form></div>
 </div>
+
+<div class="modal fade" id="linkModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog"><form method="post" action="" class="modal-content">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <div class="modal-header"><h5 class="modal-title"><i class="bi bi-send me-2"></i>Tarbiyachiga link yuborish</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <input type="text" name="who" class="form-control-plaintext fs-5 fw-bold px-0 py-0 mb-2" readonly>
+      <div id="linkNoTg" class="alert alert-warning small d-none">
+        Bu tarbiyachi botga hali <b>ulanmagan</b> (Telegram ID yo'q), shuning uchun botga yuborib bo'lmaydi.
+        «Havolani ko'rsatish» ni bosib havolani boshqa yo'l bilan (qo'ng'iroq, boshqa messenjer) jo'nating, yoki
+        «Tarbiyachilar» bo'limida uni botga ulang.
+      </div>
+      <div class="text-muted small mb-3">Havola faqat bugun uchun amal qiladi.</div>
+      <div class="d-grid gap-2">
+        <button class="btn btn-success js-send" name="choice" value="in:send"><i class="bi bi-geo-alt me-1"></i>«Keldim» tugmasini botga yuborish</button>
+        <button class="btn btn-warning js-send" name="choice" value="out:send"><i class="bi bi-house me-1"></i>«Ketdim» tugmasini botga yuborish</button>
+        <hr class="my-1">
+        <button class="btn btn-outline-secondary" name="choice" value="in:show"><i class="bi bi-link-45deg me-1"></i>«Keldim» havolasini ko'rsatish</button>
+        <button class="btn btn-outline-secondary" name="choice" value="out:show"><i class="bi bi-link-45deg me-1"></i>«Ketdim» havolasini ko'rsatish</button>
+      </div>
+    </div>
+  </form></div>
+</div>
 {% if user.is_admin %}
 {% url 'teacher_create' as create_url %}
 {% include '_form_modal.html' with modal_id='createModal' title="Yangi tarbiyachi" form=form action=create_url icon='person-plus' %}
@@ -402,6 +352,12 @@
 
 {% block extra_js %}
 <script>
+  // Link modali: tarbiyachi botga ulanmagan bo'lsa «botga yuborish» tugmalari o'chadi va ogohlantirish chiqadi
+  document.getElementById('linkModal')?.addEventListener('show.bs.modal', (e) => {
+    const linked = e.relatedTarget?.dataset.tg === '1';
+    document.querySelectorAll('#linkModal .js-send').forEach((b) => { b.disabled = !linked; });
+    document.getElementById('linkNoTg').classList.toggle('d-none', linked);
+  });
   // "Ish kuni qilish" tugmasi faqat allaqachon dam olish deb belgilangan kunda ko'rinadi
   document.getElementById('dayOffModal')?.addEventListener('show.bs.modal', (e) => {
     document.getElementById('btnDayOn').classList.toggle('d-none', e.relatedTarget?.dataset.off !== '1');

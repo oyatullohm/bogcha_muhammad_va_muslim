@@ -25,7 +25,7 @@ from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.forms import ModelChoiceField
-from django.db.models import Count, F, ProtectedError, Q, Sum
+from django.db.models import Count, F, ProtectedError, Q, Sum , Exists, OuterRef
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -278,97 +278,621 @@ def user_toggle(request, pk):
 
 
 # ============================================================ TARBIYACHI + DAVOMAT  (teacher.html)
-def _teacher_month(teacher, month_start):
-    month_end = stats.add_months(month_start, 1)
-    atts = list(teacher.attendances.filter(date__gte=month_start, date__lt=month_end).order_by('date'))
+def _teacher_month(teacher, month_start, atts=None, info=None):
+    month_end = stats.add_months(
+        month_start,
+        1,
+    )
+
+    if atts is None:
+        atts = list(
+            teacher.attendances
+            .filter(
+                date__gte=month_start,
+                date__lt=month_end,
+            )
+            .order_by('date')
+        )
+
     today = timezone.localdate()
 
-    weeks = stats.month_weeks(month_start, {a.date: a for a in atts})
-    info = workdays.status_map(weeks[0][0]['date'], weeks[-1][-1]['date'])        # haftalik + belgilangan kunlar + bayram
-    for week in weeks:
-        for cell in week:
-            a, d = cell['data'], cell['date']
-            cell['off'], cell['off_label'] = not info[d]['workday'], info[d]['label']
-            if a and a.check_in:
-                cell['status'] = 'late' if a.is_late else 'ok'
-            elif cell['in_month'] and d < today and info[d]['workday']:
-                cell['status'] = 'absent'
-            else:
-                cell['status'] = ''
-    return {
-        'teacher': teacher, 'month': month_start,
-        'prev': stats.add_months(month_start, -1), 'next': month_end,
-        'weeks': weeks, 'attendances': atts,
-        'days': sum(1 for a in atts if a.check_in),
-        'late': sum(1 for a in atts if a.is_late),
-        'hours': round(sum(a.worked_hours for a in atts), 2),
+    att_map = {
+        a.date: a
+        for a in atts
     }
 
+    weeks = stats.month_weeks(
+        month_start,
+        att_map,
+    )
+
+    # info tashqaridan berilmasa eski usulda ishlaydi
+    if info is None:
+        info = workdays.status_map(
+            weeks[0][0]['date'],
+            weeks[-1][-1]['date'],
+        )
+
+    for week in weeks:
+        for cell in week:
+            a = cell['data']
+            d = cell['date']
+
+            cell['off'] = not info[d]['workday']
+            cell['off_label'] = info[d]['label']
+
+            if a and a.check_in:
+                cell['status'] = (
+                    'late'
+                    if a.is_late
+                    else 'ok'
+                )
+
+            elif (
+                cell['in_month']
+                and d < today
+                and info[d]['workday']
+            ):
+                cell['status'] = 'absent'
+
+            else:
+                cell['status'] = ''
+
+    return {
+        'teacher': teacher,
+        'month': month_start,
+
+        'prev': stats.add_months(
+            month_start,
+            -1,
+        ),
+
+        'next': month_end,
+
+        'weeks': weeks,
+        'attendances': atts,
+
+        'days': sum(
+            1
+            for a in atts
+            if a.check_in
+        ),
+
+        'late': sum(
+            1
+            for a in atts
+            if a.is_late
+        ),
+
+        'hours': round(
+            sum(
+                a.worked_hours
+                for a in atts
+            ),
+            2,
+        ),
+    }
 
 @is_login
 def teacher_list(request):
     today = timezone.localdate()
-    day = parse_date(request.GET.get('date'), today)
+
+    day = parse_date(
+        request.GET.get('date'),
+        today,
+    )
+
     q = request.GET.get('q', '').strip()
 
-    qs = Teacher.objects.order_by('-is_active', 'full_name')
+    # =========================================================
+    # OYLAR
+    # =========================================================
+
+    am = parse_month(
+        request.GET.get('amonth'),
+        today.replace(day=1),
+    )
+
+    am_next = stats.add_months(
+        am,
+        1,
+    )
+
+    wm = parse_month(
+        request.GET.get('wmonth'),
+        today.replace(day=1),
+    )
+
+    # =========================================================
+    # TEACHERLAR
+    # =========================================================
+
+    qs = Teacher.objects.order_by(
+        '-is_active',
+        'full_name',
+    )
+
     if q:
-        qs = qs.filter(Q(full_name__icontains=q) | Q(phone__icontains=q))
-    teachers = list(qs)                                   # bir marta; qolgan hamma narsa shundan olinadi
+        qs = qs.filter(
+            Q(full_name__icontains=q)
+            |
+            Q(phone__icontains=q)
+        )
 
-    # Davomat tabi uchun faol tarbiyachilar: qidiruv bo'lmasa o'sha ro'yxatdan (qo'shimcha SQL yo'q)
-    active = [t for t in teachers if t.is_active] if not q else list(Teacher.objects.filter(is_active=True).order_by('full_name'))
-    att_map = {a.teacher_id: a for a in TeacherAttendance.objects.filter(date=day)}
-    rows = [{'teacher': t, 'att': att_map.get(t.pk)} for t in active]
+    teachers = list(qs)
 
-    # Bitta tarbiyachining oylik kalendari (?id=5&month=2026-10)
-    selected = None
-    sel_id = to_int(request.GET.get('id'))
-    if sel_id:
-        t = next((x for x in teachers if x.pk == sel_id), None) or Teacher.objects.filter(pk=sel_id).first()
-        if t:
-            selected = _teacher_month(t, parse_month(request.GET.get('month'), today.replace(day=1)))
+    if q:
+        active = list(
+            Teacher.objects
+            .filter(is_active=True)
+            .order_by('full_name')
+        )
+    else:
+        active = [
+            teacher
+            for teacher in teachers
+            if teacher.is_active
+        ]
 
-    form, edit_form, att_form = TeacherForm(), TeacherForm(), AttendanceForm(initial={'date': day})
-    if not q:                                             # qo'lda davomat formasidagi tarbiyachilar ro'yxati - tayyor
-        share_choices(att_form, teacher=choices_of(teachers))
-    ctx = {
-        'teachers': teachers, 'q': q,
-        'day': day, 'prev_day': day - timedelta(days=1), 'next_day': day + timedelta(days=1),
-        'rows': rows,
-        'present_count': sum(1 for r in rows if r['att'] and r['att'].check_in),
-        'selected': selected,
-        'form': form, 'edit_form': edit_form, 'att_form': att_form,
-        # (kind, mode, ikonka, matn): link yuborish menyusi
-        'link_actions': [('in', 'send', 'send', "«Keldim» tugmasini botga yuborish"),
-                         ('out', 'send', 'send', "«Ketdim» tugmasini botga yuborish"),
-                         ('in', 'show', 'link-45deg', "«Keldim» havolasini ko'rsatish"),
-                         ('out', 'show', 'link-45deg', "«Ketdim» havolasini ko'rsatish")],
-    }
-    # ---- "Ish kunlari" tabi: oy kalendari, haftalik sozlama, yaqin dam olish kunlari
-    wm = parse_month(request.GET.get('wmonth'), today.replace(day=1))
+    active_ids = [
+        teacher.pk
+        for teacher in active
+    ]
+
+    # =========================================================
+    # ATTENDANCE
+    # =========================================================
+
+    attendance_list = []
+
+    if active_ids:
+        attendance_list = list(
+            TeacherAttendance.objects
+            .filter(
+                teacher_id__in=active_ids,
+            )
+            .filter(
+                Q(
+                    date__gte=am,
+                    date__lt=am_next,
+                )
+                |
+                Q(date=day)
+            )
+            .order_by('date')
+        )
+
+    # day uchun
+    att_map = {}
+
+    # oy uchun
+    by_teacher = defaultdict(dict)
+
+    for attendance in attendance_list:
+        teacher_id = attendance.teacher_id
+
+        if am <= attendance.date < am_next:
+            by_teacher[
+                teacher_id
+            ][attendance.date] = attendance
+
+        if attendance.date == day:
+            att_map[teacher_id] = attendance
+
+    # =========================================================
+    # KUNLIK ROWLAR
+    # =========================================================
+
+    rows = [
+        {
+            'teacher': teacher,
+            'att': att_map.get(teacher.pk),
+        }
+        for teacher in active
+    ]
+
+    present_count = sum(
+        1
+        for row in rows
+        if row['att']
+        and row['att'].check_in
+    )
+
+    # =========================================================
+    # HAFTALIK CALENDAR
+    # =========================================================
+
     w_weeks = stats.month_weeks(wm)
-    w_info = workdays.status_map(w_weeks[0][0]['date'], w_weeks[-1][-1]['date'])
+
+    # =========================================================
+    # STATUS_MAP NI FAQAT 1 MARTA OLAMIZ
+    # =========================================================
+    #
+    # Uchta joy:
+    #
+    #   _teacher_month()
+    #   am_info
+    #   w_info
+    #
+    # uchun bir xil katta intervaldan foydalanamiz.
+    #
+
+    am_days = [
+        am + timedelta(days=i)
+        for i in range(
+            (am_next - am).days
+        )
+    ]
+
+    am_start = am_days[0]
+    am_end = am_days[-1]
+
+    w_start = w_weeks[0][0]['date']
+    w_end = w_weeks[-1][-1]['date']
+
+    # Selected teacher ham shu am oyidan foydalanadi.
+    status_start = min(
+        am_start,
+        w_start,
+    )
+
+    status_end = max(
+        am_end,
+        w_end,
+    )
+
+    # FAQAT 1 TA status_map()
+    status_info = workdays.status_map(
+        status_start,
+        status_end,
+    )
+
+    # =========================================================
+    # SELECTED TEACHER
+    # =========================================================
+
+    selected = None
+
+    sel_id = to_int(
+        request.GET.get('id')
+    )
+
+    if sel_id:
+
+        selected_teacher = next(
+            (
+                teacher
+                for teacher in teachers
+                if teacher.pk == sel_id
+            ),
+            None,
+        )
+
+        if selected_teacher is None:
+            selected_teacher = (
+                Teacher.objects
+                .filter(pk=sel_id)
+                .first()
+            )
+
+        if selected_teacher:
+
+            selected_atts = [
+                attendance
+                for attendance in attendance_list
+                if (
+                    attendance.teacher_id
+                    == selected_teacher.pk
+                    and am
+                    <= attendance.date
+                    < am_next
+                )
+            ]
+
+            # Active teacher bo'lsa oldindan olingan
+            # attendance ishlatiladi.
+            #
+            # info ham oldindan olingan.
+            #
+            # Natijada _teacher_month() ichida
+            # SQL qilinmaydi.
+            if selected_teacher.pk in active_ids:
+                selected = _teacher_month(
+                    selected_teacher,
+                    am,
+                    atts=selected_atts,
+                    info=status_info,
+                )
+
+            else:
+                selected = _teacher_month(
+                    selected_teacher,
+                    am,
+                    info=status_info,
+                )
+
+    # =========================================================
+    # FORMLAR
+    # =========================================================
+
+    form = TeacherForm()
+    edit_form = TeacherForm()
+
+    att_form = AttendanceForm(
+        initial={
+            'date': day,
+        }
+    )
+
+    if not q:
+        share_choices(
+            att_form,
+            teacher=choices_of(teachers),
+        )
+
+    # =========================================================
+    # CONTEXT
+    # =========================================================
+
+    ctx = {
+        'teachers': teachers,
+        'q': q,
+
+        'day': day,
+        'prev_day': day - timedelta(days=1),
+        'next_day': day + timedelta(days=1),
+
+        'rows': rows,
+        'present_count': present_count,
+
+        'selected': selected,
+
+        'form': form,
+        'edit_form': edit_form,
+        'att_form': att_form,
+
+        'link_actions': [
+            (
+                'in',
+                'send',
+                'send',
+                "«Keldim» tugmasini botga yuborish",
+            ),
+            (
+                'out',
+                'send',
+                'send',
+                "«Ketdim» tugmasini botga yuborish",
+            ),
+            (
+                'in',
+                'show',
+                'link-45deg',
+                "«Keldim» havolasini ko'rsatish",
+            ),
+            (
+                'out',
+                'show',
+                'link-45deg',
+                "«Ketdim» havolasini ko'rsatish",
+            ),
+        ],
+    }
+
+    # =========================================================
+    # OYLIK ATTENDANCE
+    # =========================================================
+
+    am_info = status_info
+
+    am_rows = []
+
+    for teacher in active:
+
+        teacher_attendance = by_teacher.get(
+            teacher.pk,
+            {},
+        )
+
+        cells = []
+        came = 0
+        late = 0
+        hours = 0
+
+        for d in am_days:
+
+            attendance = teacher_attendance.get(d)
+
+            if attendance and attendance.check_in:
+
+                status = (
+                    'late'
+                    if attendance.is_late
+                    else 'ok'
+                )
+
+                came += 1
+
+                if attendance.is_late:
+                    late += 1
+
+                hours += attendance.worked_hours
+
+            elif d > today:
+
+                status = 'future'
+
+            elif not am_info[d]['workday']:
+
+                status = 'off'
+
+            else:
+
+                status = 'absent'
+
+            cells.append({
+                'date': d,
+                'status': status,
+                'att': attendance,
+            })
+
+        am_rows.append({
+            'teacher': teacher,
+            'cells': cells,
+            'came': came,
+            'late': late,
+            'hours': round(hours, 2),
+        })
+
+    wd_names = [
+        'Du',
+        'Se',
+        'Ch',
+        'Pa',
+        'Ju',
+        'Sh',
+        'Ya',
+    ]
+
+    ctx.update({
+        'am_month': am,
+
+        'am_prev': stats.add_months(
+            am,
+            -1,
+        ),
+
+        'am_next': am_next,
+
+        'am_days': [
+            {
+                'date': d,
+                'wd': wd_names[d.weekday()],
+                'off': not am_info[d]['workday'],
+            }
+            for d in am_days
+        ],
+
+        'am_rows': am_rows,
+    })
+
+    # =========================================================
+    # HAFTALIK
+    # =========================================================
+
+    # status_map() qayta chaqirilmaydi.
+    w_info = status_info
+
     for week in w_weeks:
         for cell in week:
-            cell['info'] = w_info[cell['date']]
-    ctx.update({
-        'w_month': wm, 'w_prev': stats.add_months(wm, -1), 'w_next': stats.add_months(wm, 1), 'w_weeks': w_weeks,
-        'w_weekly': workdays.get_weekdays(), 'weekday_names': workdays.WEEKDAY_NAMES,
-        'w_upcoming': list(DayOff.objects.filter(date__gte=today).select_related('created_by')[:30]),
-    })
-    if request.user.is_admin:
-        ctx['kg_form'] = KindergartenForm(instance=Kindergarten.objects.first())
-        # botga parol bilan kirgan, lekin hali tarbiyachi/xodimga ulanmaganlar
-        pending = list(BotUser.objects.filter(verified=True)
-                       .exclude(telegram_id__in=Teacher.objects.filter(telegram_id__isnull=False).values('telegram_id'))
-                       .exclude(telegram_id__in=User.objects.filter(telegram_id__isnull=False).values('telegram_id')))
-        ctx['bot_pending'] = pending
-        if pending:
-            ctx['bot_teachers'] = Teacher.objects.filter(is_active=True, telegram_id__isnull=True).order_by('full_name')
-            ctx['bot_users'] = User.objects.filter(is_active=True, telegram_id__isnull=True).order_by('username')
-    return render(request, tpl('teacher.html'), ctx)
+            cell['info'] = w_info[
+                cell['date']
+            ]
 
+    ctx.update({
+        'w_month': wm,
+
+        'w_prev': stats.add_months(
+            wm,
+            -1,
+        ),
+
+        'w_next': stats.add_months(
+            wm,
+            1,
+        ),
+
+        'w_weeks': w_weeks,
+
+        'w_weekly': workdays.get_weekdays(),
+
+        'weekday_names': (
+            workdays.WEEKDAY_NAMES
+        ),
+
+        'w_upcoming': list(
+            DayOff.objects
+            .filter(
+                date__gte=today,
+            )
+            .select_related('created_by')[:30]
+        ),
+    })
+
+    # =========================================================
+    # ADMIN
+    # =========================================================
+
+    if request.user.is_admin:
+
+        ctx['kg_form'] = KindergartenForm(
+            instance=Kindergarten.objects.first()
+        )
+
+        # SQL ichida EXISTS.
+        # Alohida Teacher/User ID query kerak emas.
+        teacher_exists = Teacher.objects.filter(
+            telegram_id=OuterRef(
+                'telegram_id'
+            )
+        )
+
+        user_exists = User.objects.filter(
+            telegram_id=OuterRef(
+                'telegram_id'
+            )
+        )
+
+        pending = list(
+            BotUser.objects
+            .filter(
+                verified=True,
+            )
+            .annotate(
+                is_teacher=Exists(
+                    teacher_exists
+                ),
+                is_user=Exists(
+                    user_exists
+                ),
+            )
+            .filter(
+                is_teacher=False,
+                is_user=False,
+            )
+        )
+
+        ctx['bot_pending'] = pending
+
+        if pending:
+
+            ctx['bot_teachers'] = list(
+                Teacher.objects
+                .filter(
+                    is_active=True,
+                    telegram_id__isnull=True,
+                )
+                .order_by('full_name')
+            )
+
+            ctx['bot_users'] = list(
+                User.objects
+                .filter(
+                    is_active=True,
+                    telegram_id__isnull=True,
+                )
+                .order_by('username')
+            )
+
+    # =========================================================
+    # RENDER
+    # =========================================================
+
+    return render(
+        request,
+        tpl('teacher.html'),
+        ctx,
+    )
 
 @admin_required
 @require_POST
