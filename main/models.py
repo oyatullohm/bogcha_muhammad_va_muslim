@@ -533,6 +533,8 @@ class ProductOut(models.Model):
         super().save(*args, **kwargs)
         if is_new:
             Product.objects.filter(pk=self.product_id).update(quantity=F('quantity') - self.quantity)
+            from .service import notify_product_low
+            notify_product_low(product.id)
         if self.menu_id:
             self.menu.recalc_cost()
 

@@ -52,7 +52,7 @@ class BForm(BootstrapMixin, forms.ModelForm):
 class UserCreateForm(BootstrapMixin, UserCreationForm):
     class Meta(UserCreationForm.Meta):
         model = User
-        fields = ('username', 'role', 'phone', 'birth_date', 'telegram_id')
+        fields = ('username','role', 'phone', 'birth_date', 'telegram_id')
         widgets = {'birth_date': date_w()}
 
 
@@ -64,8 +64,8 @@ class UserUpdateForm(BForm):
 
     class Meta:
         model = User
-        fields = ('username', 'first_name', 'last_name', 'role', 'phone', 'birth_date',
-                  'photo', 'telegram_id', 'is_active')
+        fields = ('username',  'role', 'phone', 'birth_date',
+                   'telegram_id', 'is_active')
         widgets = {'birth_date': date_w()}
 
     def clean_new_password(self):
@@ -214,7 +214,7 @@ class ProductForm(BForm):
 class ProductInForm(BForm):
     class Meta:
         model = ProductIn
-        fields = ('product', 'quantity', 'total_price', 'date', 'supplier')
+        fields = ('product', 'quantity', 'total_price', 'date')
         widgets = {'date': date_w()}
 
 
@@ -259,12 +259,11 @@ class ProductOutForm(BForm):
             )
         return data
 
-
 # ------------------------------------------------------------ TAOM
 class MealForm(BForm):
     class Meta:
         model = Meal
-        fields = ('name', 'description', 'photo', 'is_active')
+        fields = ('name', 'is_active')
         widgets = {'description': forms.Textarea(attrs={'rows': 2})}
 
 
