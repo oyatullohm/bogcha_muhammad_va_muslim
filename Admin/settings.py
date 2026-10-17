@@ -113,20 +113,20 @@ handler500 = 'main.home_views.custom_500'
 handler403 = 'main.home_views.custom_403'
 handler400 = 'main.home_views.custom_400'
 
-LOGGING = {
-    'version':1,
-    'handlers':{
-         'file': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': 'debug.log'
-        },
-        'console':{'class':'logging.StreamHandler'}
-    },
-    'loggers':{
-        'django.db.backends':{
-            'handlers':['file'],
-            'level':'DEBUG'
-                    }
-               }
-}  
+# LOGGING = {
+#     'version':1,
+#     'handlers':{
+#          'file': {
+#             'level': 'DEBUG',
+#             'class': 'logging.FileHandler',
+#             'filename': 'debug.log'
+#         },
+#         'console':{'class':'logging.StreamHandler'}
+#     },
+#     'loggers':{
+#         'django.db.backends':{
+#             'handlers':['file'],
+#             'level':'DEBUG'
+#                     }
+#                }
+# }  
